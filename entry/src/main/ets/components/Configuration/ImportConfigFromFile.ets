@@ -22,6 +22,7 @@ import { ConfigData } from "../../common/entity/PageArgumentEntity"
 import { UIConfig } from "../../entryability/AppState"
 import { customAnimationUtil } from "../../common/utils/Animation"
 import { EventHub } from "xb_components"
+import { immersiveSurfaceColor } from "../../common/utils/ImmersiveMaterialUtil"
 
 
 
@@ -72,7 +73,7 @@ export struct ImportConfigFromFile {
       .height('100%')
       .hideToolBar(true)
       .hideTitleBar(true)
-      .backgroundColor($r('app.color.background'))
+      .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
     } else {
       // 新增配置
       NavDestination() {
@@ -80,7 +81,7 @@ export struct ImportConfigFromFile {
       }
       .height('100%')
       .hideTitleBar(true)
-      .backgroundColor($r('app.color.background'))
+      .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
       .onBackPressed(() => {
         if (this.allInputHaveValue) {
           // 弹框是否保存已经编辑好的配置
@@ -121,7 +122,7 @@ export struct ImportConfigFromFile {
       mainTitleFontWeight: BIND_SHEET_MAIN_FONT_WEIGHT,
       mainTitleFontSize: BIND_SHEET_MAIN_FONTSIZE,
       subTitleFontSize: BIND_SHEET_SUB_FONTSIZE,
-      titleBackgroundColor: $r('app.color.background'),
+      titleBackgroundColor: immersiveSurfaceColor($r('app.color.background')),
       needSetHeight: true,
       padding: {
         // 为什么设置`15`，看Builder的参数中`padding`的介绍：ConfigAddBindSheetTitleBuilderParam
@@ -256,7 +257,7 @@ export struct ImportConfigFromFile {
     },
     alignment: DialogAlignment.Center,
     width: 328,
-    backgroundColor: $r('app.color.list_item_background_color'),
+    backgroundColor: immersiveSurfaceColor($r('app.color.list_item_background_color')),
   })
 
   aboutToAppear(): void {

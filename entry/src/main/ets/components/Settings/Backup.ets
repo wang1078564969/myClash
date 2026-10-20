@@ -12,6 +12,7 @@ import { WebDavManager } from "../../common/utils/webdav/manager"
 import { WebDavClient } from "../../common/utils/webdav/client"
 import { FileInfo, WebDavConfig } from "../../common/utils/webdav/config"
 import { Xb_AnimationStyle } from "xb_components"
+import { immersiveSurfaceColor } from "../../common/utils/ImmersiveMaterialUtil"
 
 
 @Component
@@ -343,7 +344,7 @@ struct CloudFiles {
     .padding(16)
     .width('100%')
     .alignItems(HorizontalAlign.Center)
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
   }
 
   aboutToAppear(): void {

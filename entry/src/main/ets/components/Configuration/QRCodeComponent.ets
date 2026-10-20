@@ -15,6 +15,7 @@ import { hilog } from "@kit.PerformanceAnalysisKit"
 import { ANIMATION_DURATION_300, APP_LINKING } from "../../common/entity/Constants"
 import { BusinessError } from '@kit.BasicServicesKit';
 import { ItemRestriction, SegmentButton, SegmentButtonOptions, SegmentButtonTextItem } from "@kit.ArkUI"
+import { immersiveSurfaceColor } from '../../common/utils/ImmersiveMaterialUtil'
 
 
 export interface IQRCodeParam {
@@ -133,7 +134,7 @@ export struct QRCodeDialog {
       }
     }
     .padding(16)
-    .backgroundColor($r('app.color.container_background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.container_background')))
     .width('100%')
     .height("100%")
     .justifyContent(FlexAlign.SpaceAround)

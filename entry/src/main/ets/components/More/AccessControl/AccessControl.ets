@@ -28,6 +28,7 @@ import {
   Xb_ToastUtil
 } from 'xb_components'
 import { customAnimationUtil } from '../../../common/utils/Animation'
+import { immersiveSheetMaterial, immersiveSurfaceColor } from '../../../common/utils/ImmersiveMaterialUtil'
 import { EventHub, EventKey } from '../../../common/EventHub'
 import { AccessControlCompatibleMerger } from '../../../common/utils/AccessControlCompatibleUtil'
 import {
@@ -375,7 +376,8 @@ export struct AccessControl {
     .bindSheet($$this.isShowSheet, this.SheetBuilder(), {
       detents: [SheetSize.MEDIUM, SheetSize.LARGE],
       dragBar: false,
-      backgroundColor: $r('app.color.background'),
+      backgroundColor: immersiveSurfaceColor($r('app.color.background')),
+      systemMaterial: immersiveSheetMaterial(),
       keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY,
       scrollSizeMode: ScrollSizeMode.CONTINUOUS,
       preferType: SheetType.CENTER,

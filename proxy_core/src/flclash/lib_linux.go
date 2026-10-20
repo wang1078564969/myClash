@@ -110,8 +110,13 @@ func StartTUN(fd int, markSocket func(Fd)) {
 		tunLock.Lock()
 		defer tunLock.Unlock()
 		f := int(fd)
-		tunListener, _ = t.Start(f, currentConfig.General.Tun.Device, currentConfig.General.Tun.Stack, currentConfig.General.Tun.DNSHijack)
-		if tunListener != nil {
+		var startErr error
+		tunListener, startErr = t.Start(f, currentConfig.General.Tun.Device, currentConfig.General.Tun.Stack, currentConfig.General.Tun.DNSHijack)
+		if startErr != nil {
+			// 旧版此处吞掉错误，TUN 启动失败时 VPN 仍显示已连接但无网络。
+			// 现在必须落 hilog（hdc shell hilog | grep flclashGo）。
+			log.Errorln("[TUN] start failed: %v (fd=%d device=%s stack=%s)", startErr, f, currentConfig.General.Tun.Device, currentConfig.General.Tun.Stack)
+		} else if tunListener != nil {
 			log.Infoln("TUN address: %v", tunListener.Address())
 		}
 		now := time.Now()
@@ -120,6 +125,14 @@ func StartTUN(fd int, markSocket func(Fd)) {
 	// 启动后台保活 goroutine：每 60s 关闭空闲连接防止 NAT 超时
 	startKeepalive()
 }
+
+// keepaliveLastBytes/keepaliveIdleSince 以连接为单位记录字节数快照与最近变化时间，
+// 替代旧内核 Tracker.LastActivity()（新内核已移除）实现空闲检测。
+var (
+	keepaliveMu        sync.Mutex
+	keepaliveLastBytes = map[string]int64{}
+	keepaliveIdleSince = map[string]time.Time{}
+)
 
 func startKeepalive() {
 	keepaliveOnce.Do(func() {
@@ -141,7 +154,7 @@ func startKeepalive() {
 	       }
 	       // 仅在有活跃连接时才做健康检查, 无流量时跳过以降低功耗
 	       connSnapshot := statistic.DefaultManager.Snapshot()
-	       if connSnapshot != nil && connSnapshot.ConnectionCount() > 0 {
+	       if connSnapshot != nil && len(connSnapshot.Connections) > 0 {
 	        go handleHealthCheckAll()
 	       }
 	   func() {
@@ -151,15 +164,39 @@ func startKeepalive() {
 	     return
 	    }
 	    // 关闭所有空闲连接，强制 NAT 重新建立映射
+	    now := time.Now()
 	    n := 0
+	    liveIds := make(map[string]bool, 16)
 	    statistic.DefaultManager.Range(func(c statistic.Tracker) bool {
-	     // 仅关闭已空闲超过 120s 的连接
-	     if time.Since(c.LastActivity()) > 120*time.Second {
+	     info := c.Info()
+	     id := c.ID()
+	     liveIds[id] = true
+	     total := info.UploadTotal.Load() + info.DownloadTotal.Load()
+	     keepaliveMu.Lock()
+	     prev, ok := keepaliveLastBytes[id]
+	     if !ok || prev != total {
+	      keepaliveLastBytes[id] = total
+	      keepaliveIdleSince[id] = now
+	      keepaliveMu.Unlock()
+	      return true
+	     }
+	     idle := now.Sub(keepaliveIdleSince[id])
+	     keepaliveMu.Unlock()
+	     // 仅关闭已空闲超过 120s 的连接(字节总数两个采样周期未变化)
+	     if idle > 120*time.Second {
 	      _ = c.Close()
 	      n++
 	     }
 	     return true
 	    })
+	    keepaliveMu.Lock()
+	    for id := range keepaliveLastBytes {
+	     if !liveIds[id] {
+	      delete(keepaliveLastBytes, id)
+	      delete(keepaliveIdleSince, id)
+	     }
+	    }
+	    keepaliveMu.Unlock()
 	    if n > 0 {
 	     log.Infoln("[Keepalive] 已关闭 %d 个空闲连接", n)
 	    }
@@ -215,18 +252,19 @@ func StopTun() {
 	}()
 }
 
-func SetFdMap(fd C.long) {
-	fdInt := int64(fd)
-	go func() {
-		fdMap.Store(fdInt)
-		// 通知等待的 initSocketHook 协程，避免忙等待轮询
-		if ch, ok := fdWaitMap.Load(fdInt); ok {
-			select {
-			case ch <- struct{}{}:
-			default:
-			}
+// NotifyFdProtected 由 NAPI setFdMap（main_cgo.go）调用，参数为 Fd.Id。
+// 记录 fdMap 并唤醒 initSocketHook 中等待的 channel。
+// 修复说明：旧 SetFdMap(C.long) 无 //export 也无调用方，属死代码；
+// channel 等待从未被唤醒 → 每个出站 socket 等满 5s 超时 → 未保护 →
+// 流量回环进 TUN → VPN 显示已连接但无网络。
+func NotifyFdProtected(id int64) {
+	fdMap.Store(id)
+	if ch, ok := fdWaitMap.Load(id); ok {
+		select {
+		case ch <- struct{}{}:
+		default:
 		}
-	}()
+	}
 }
 
 func initSocketHook(markSocket func(Fd)) {
@@ -253,12 +291,15 @@ func initSocketHook(markSocket func(Fd)) {
 			})
 
 			// 等待 SetFdMap 通知。
-			// 后台无长时任务时，VPN 进程 JS 事件循环会被系统限流，protect IPC 往返
-			// 可能超过 500ms；超时会导致出站 fd 未绕过 TUN → 流量回环 → DNS 全断。
-			// 放宽到 5s，并记录超时点便于排查（hilog | grep SocketHook protect）
+			// 等待发生在 conn.Control（connect 之前），会消耗拨号超时预算，
+			// 绝不能超过 500ms：等满 5s 会吃掉整个拨号 deadline，所有出站
+			// 连接 i/o timeout（VPN 显示已连接但无网络）。
+			// protect 慢于 500ms（后台 JS 被限流）时放弃等待直接放行：
+			// HarmonyOS 不回收 VPN 扩展进程自身流量，未 protect 的出站
+			// socket 仍可直连（旧 100M 内核即全程未 protect 正常工作）。
 			select {
 			case <-waitCh:
-			case <-time.After(5 * time.Second):
+			case <-time.After(500 * time.Millisecond):
 				log.Warnln("[SocketHook] protect wait timeout, fd=%d id=%d socket un-protected, may loop into TUN", fdInt, id)
 			}
 			fdWaitMap.Delete(id)

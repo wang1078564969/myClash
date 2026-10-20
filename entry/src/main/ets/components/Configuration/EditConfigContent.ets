@@ -16,6 +16,7 @@ import { ConfigData } from "../../common/entity/PageArgumentEntity";
 import { BusinessError } from '@kit.BasicServicesKit';
 import { util } from "@kit.ArkTS";
 import { common } from "@kit.AbilityKit";
+import { immersiveSurfaceColor } from "../../common/utils/ImmersiveMaterialUtil";
 
 @Builder
 export function EditConfigContentBuilder(name: string, param: Object){
@@ -139,7 +140,7 @@ struct EditConfigContent {
           mainTitleFontWeight: BIND_SHEET_MAIN_FONT_WEIGHT,
           mainTitleFontSize: BIND_SHEET_MAIN_FONTSIZE,
           subTitleFontSize: BIND_SHEET_SUB_FONTSIZE,
-          titleBackgroundColor: $r('app.color.background'),
+          titleBackgroundColor: immersiveSurfaceColor($r('app.color.background')),
           padding: {
             // 为什么设置`15`，看Builder的参数中`padding`的介绍：ConfigAddBindSheetTitleBuilderParam
             left: 15,
@@ -169,7 +170,7 @@ struct EditConfigContent {
     }
     .height('100%')
     .hideTitleBar(true)
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
     .onBackPressed(() => {
       if (this.configContentChange) {
         // 弹框是否保存已经编辑好的配置
@@ -254,7 +255,7 @@ struct EditConfigContent {
     },
     alignment: DialogAlignment.Center,
     width: 328,
-    backgroundColor: $r('app.color.list_item_background_color'),
+    backgroundColor: immersiveSurfaceColor($r('app.color.list_item_background_color')),
   })
 
   /** 设置自动换行 */

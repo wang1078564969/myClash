@@ -112,10 +112,28 @@ func handleUpdateConfig(bytes []byte) string {
 	return ""
 }
 
+// proxiesWithProviders 合并静态代理与全部 provider 成员，
+// 替代旧内核已移除的 tunnel.ProxiesWithProviders()。
+// tunnel.Proxies() 返回内部 map，必须拷贝后再追加，避免污染内部状态。
+func proxiesWithProviders() map[string]constant.Proxy {
+	merged := make(map[string]constant.Proxy)
+	for name, proxy := range tunnel.Proxies() {
+		merged[name] = proxy
+	}
+	for _, p := range tunnel.Providers() {
+		for _, proxy := range p.Proxies() {
+			if _, exist := merged[proxy.Name()]; !exist {
+				merged[proxy.Name()] = proxy
+			}
+		}
+	}
+	return merged
+}
+
 func handleGetProxies() string {
 	runLock.Lock()
 	defer runLock.Unlock()
-	data, err := json.Marshal(tunnel.ProxiesWithProviders())
+	data, err := json.Marshal(proxiesWithProviders())
 	if err != nil {
 		return ""
 	}
@@ -134,7 +152,7 @@ func handleChangeProxy(data string, fn func(string string)) {
 		}
 		groupName := *params.GroupName
 		proxyName := *params.ProxyName
-		proxies := tunnel.ProxiesWithProviders()
+		proxies := proxiesWithProviders()
 		group, ok := proxies[groupName]
 		if !ok {
 			fn("Not found group")
@@ -211,7 +229,7 @@ func handleAsyncTestDelay(paramsString string, fn func(string)) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(params.Timeout))
 		defer cancel()
 
-		proxies := tunnel.ProxiesWithProviders()
+		proxies := proxiesWithProviders()
 		proxy := proxies[params.ProxyName]
 
 		delayData := &Delay{
@@ -264,7 +282,7 @@ func handleAsyncTestDelay(paramsString string, fn func(string)) {
 		   testURL = params.TestURL
 		  }
 
-		  proxies := tunnel.ProxiesWithProviders()
+		  proxies := proxiesWithProviders()
 		  var mu sync.Mutex
 		  results := make([]Delay, 0, len(params.ProxyNames))
 		  sem := make(chan struct{}, 50)
@@ -330,7 +348,7 @@ func handleAsyncTestDelay(paramsString string, fn func(string)) {
 	if currentConfig != nil && string(currentConfig.General.Mode) == "direct" {
 		return
 	}
-	proxies := tunnel.ProxiesWithProviders()
+	proxies := proxiesWithProviders()
 	if len(proxies) == 0 {
 		return
 	}
@@ -523,25 +541,25 @@ func handleUpdateGeoData(geoType string, geoName string, fn func(value string)) 
 		path := constant.Path.Resolve(geoName)
 		switch geoType {
 		case "MMDB":
-			err := updater.UpdateMMDBWithPath(path)
+			err := updater.UpdateMMDB()
 			if err != nil {
 				fn(err.Error())
 				return
 			}
 		case "ASN":
-			err := updater.UpdateASNWithPath(path)
+			err := updater.UpdateASN()
 			if err != nil {
 				fn(err.Error())
 				return
 			}
 		case "GeoIp":
-			err := updater.UpdateGeoIpWithPath(path)
+			err := updater.UpdateGeoIp()
 			if err != nil {
 				fn(err.Error())
 				return
 			}
 		case "GeoSite":
-			err := updater.UpdateGeoSiteWithPath(path)
+			err := updater.UpdateGeoSite()
 			if err != nil {
 				fn(err.Error())
 				return
@@ -667,11 +685,11 @@ var reqeustList = []statistic.Tracker{}
 const maxRequestList = 1000
 
 func init() {
-	adapter.UrlTestHook = func(url string, name string, delay uint16) {
+	adapter.UrlTestHook = func(url string, name string, delay uint16, timedOut bool) {
 		delayData := &Delay{
 			Name: name,
 		}
-		if delay == 0 {
+		if timedOut || delay == 0 {
 			delayData.Value = -1
 		} else {
 			delayData.Value = int32(delay)

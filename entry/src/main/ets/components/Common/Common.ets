@@ -20,6 +20,15 @@ import { Core } from "@ohos/hypium"
 import { image } from "@kit.ImageKit"
 import { photoAccessHelper } from "@kit.MediaLibraryKit"
 import { fileIo as fs } from "@kit.CoreFileKit"
+import lazy { HdsTabs } from "@kit.UIDesignKit"
+import type { HdsTabsFloatingStyle } from "@kit.UIDesignKit"
+import { CircleShape } from "@kit.ArkUI"
+import {
+  hdsGlassBarStyle,
+  immersiveMenuMaterial,
+  immersiveSurfaceColor,
+  isHdsImmersiveMaterialAvailable
+} from "../../common/utils/ImmersiveMaterialUtil"
 
 export const context = getContext() as common.UIAbilityContext
 // 一级图标色，黑色
@@ -109,11 +118,53 @@ export struct ButtonBuilder {
   @Prop enableTransition: boolean = true
   @Prop iconColor: ResourceColor = icon_primary
   @Prop BackgroundColor: ResourceColor = Color.Transparent
+  @Prop useSystemMaterial: boolean = false
   @StorageLink('uiConfig') uiConfig: UIConfig = new UIConfig()
   @StorageProp('WindowMode') windowMode: boolean = false
+  private hdsMaterialAvailable: boolean = false
   onCheck: () => void = () => {}
 
+  aboutToAppear(): void {
+    this.hdsMaterialAvailable = isHdsImmersiveMaterialAvailable()
+  }
+
+  useHdsMaterial(): boolean {
+    return this.useSystemMaterial && this.hdsMaterialAvailable && !this.windowMode
+  }
+
+  getHdsStyle(): HdsTabsFloatingStyle | undefined {
+    return this.useHdsMaterial() ? hdsGlassBarStyle(40) : undefined
+  }
+
   build() {
+    if (this.useHdsMaterial()) {
+      // HarmonyOS 7 上普通节点的 uiMaterial 不渲染，圆形按钮的玻璃底由 HDS 悬浮栏提供
+      HdsTabs({ barPosition: BarPosition.End }) {
+        TabContent() {
+        }
+        .backgroundColor(Color.Transparent)
+        .tabBar(this.ActionButton)
+      }
+      .barMode(BarMode.Fixed)
+      .vertical(false)
+      .barOverlap(true)
+      .scrollable(false)
+      .barHeight(40)
+      .barBackgroundColor(Color.Transparent)
+      .barBackgroundBlurStyle(BlurStyle.NONE)
+      .barBackgroundStyle({ maskColor: Color.Transparent })
+      .backgroundColor(Color.Transparent)
+      .barFloatingStyle(this.getHdsStyle())
+      .width(40)
+      .height(40)
+      .clipShape(new CircleShape({ width: 40, height: 40 }))
+    } else {
+      this.ActionButton()
+    }
+  }
+
+  @Builder
+  ActionButton() {
     Button({ type: ButtonType.Circle, stateEffect: true }) {
       if (this.isImage) {
         Image(this.icon)
@@ -128,7 +179,9 @@ export struct ButtonBuilder {
     }
     .width(40)
     .height(40)
-    .backgroundColor(this.windowMode ? Color.Transparent : $r('app.color.settings_container_background'))
+    .translate(this.useHdsMaterial() ? { y: -4 } : { y: 0 })
+    .backgroundColor(this.useHdsMaterial() ? Color.Transparent :
+      this.windowMode ? Color.Transparent : $r('app.color.settings_container_background'))
     .clickEffect(customAnimationUtil.isClickEffect(this.uiConfig))
     .hitTestBehavior(this.enableClick ? HitTestMode.Default : HitTestMode.None)
     .onClick(() => {
@@ -465,7 +518,7 @@ export struct DisclaimerCustomDialog {
           .fontColor(Color.White)
       }
     }.constraintSize({maxHeight: 230})
-    .backgroundColor($r('app.color.container_background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.container_background')))
     .padding({left: 24, right: 24, bottom: 10})
     .borderRadius(32)
   }
@@ -539,7 +592,7 @@ export struct theRowCustomDialog {
       }.width('100%')
     }
     .padding({left: 16, right: 16, top: 15, bottom: 15})
-    .backgroundColor($r('app.color.container_background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.container_background')))
     .width('100%')
   }
 }
@@ -644,7 +697,7 @@ export struct KVCustomDialog {
       }.width('100%')
     }
     .padding({left: 16, right: 16, top: 15, bottom: 15})
-    .backgroundColor($r('app.color.container_background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.container_background')))
     .width('100%')
   }
 
@@ -743,7 +796,7 @@ export struct theCustomDialog {
         })
     }
     .padding(16)
-    .backgroundColor($r('app.color.container_background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.container_background')))
     .width('100%')
   }
 }
@@ -1131,7 +1184,7 @@ export struct menuRowList {
           .fontSize(14)
           .margin({left: 7, right: 8})
           .fontColor([this.rowEnabled ? icon_primary : $r('sys.color.font_fourth')])
-      }.bindMenu(this.menu())
+      }.bindMenu(this.menu(), { systemMaterial: immersiveMenuMaterial() })
     }
     .RowStyle()
     .clickEffect(this.uiConfig.isAnimation ? { level: ClickEffectLevel.MIDDLE} : null)

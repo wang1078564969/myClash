@@ -6,6 +6,7 @@ import { AppConfig, isEnd, ProxyCardSize, ProxyGroupType, UIConfig } from '../..
 import { customAnimationUtil } from '../../common/utils/Animation'
 import { proxyBindSheetTitleStyle } from '../Common/Common'
 import { TabContentTitleMargin } from '../../common/breakpoint/BreakPoint'
+import { immersiveSurfaceColor } from '../../common/utils/ImmersiveMaterialUtil'
 
 @Component
 export struct StylesEdit {
@@ -165,7 +166,7 @@ export struct StylesEdit {
     .width('100%')
     .height('100%')
     .hideTitleBar(true)
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
     .padding({
       left: TabContentTitleMargin(this.widthBp, this.heightBp),
       right: TabContentTitleMargin(this.widthBp, this.heightBp),

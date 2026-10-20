@@ -252,9 +252,6 @@ func overwriteConfig(targetConfig *config.RawConfig, patchConfig config.RawConfi
 	}
 	// ★ Tunnel 流量转发: 从 UI 配置透传到内核(与 mihomo tunnels 段字段一致)
 	targetConfig.Tunnels = patchConfig.Tunnels
-	if patchConfig.App != nil {
-		targetConfig.App = patchConfig.App
-	}
 
 	if configParams.TestURL != nil {
 		constant.DefaultTestURL = *configParams.TestURL
@@ -327,7 +324,7 @@ func updateListeners(force bool) {
 	listener.ReCreateShadowSocks(general.ShadowSocksConfig, tunnel.Tunnel)
 	listener.ReCreateVmess(general.VmessConfig, tunnel.Tunnel)
 	listener.ReCreateTuic(general.TuicServer, tunnel.Tunnel)
-	if !features.Android && !features.OHOS {
+	if !features.Android && !OHOS {
 		listener.ReCreateTun(general.Tun, tunnel.Tunnel)
 	}
 }
@@ -341,7 +338,7 @@ func patchSelectGroup() {
 	if mapping == nil {
 		return
 	}
-	for name, proxy := range tunnel.ProxiesWithProviders() {
+	for name, proxy := range proxiesWithProviders() {
 		outbound, ok := proxy.(*adapter.Proxy)
 		if !ok {
 			continue

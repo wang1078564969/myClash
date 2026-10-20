@@ -15,6 +15,7 @@ import { customAnimationUtil, isON } from "../../common/utils/Animation"
 import { NeedClearMoreStack, PageMargin } from "../../common/breakpoint/BreakPoint"
 import { icon_primary } from "../Common/Common"
 import { Xb_ToastUtil } from "xb_components"
+import { immersiveSheetMaterial, immersiveSurfaceColor } from "../../common/utils/ImmersiveMaterialUtil"
 
 // 资源数据
 interface ResourcesData {
@@ -410,7 +411,8 @@ struct Resources {
         {
           detents: [684, 300],
           dragBar: false,
-          backgroundColor: $r('app.color.background'),
+          backgroundColor: immersiveSurfaceColor($r('app.color.background')),
+          systemMaterial: immersiveSheetMaterial(),
           preferType: SheetType.CENTER,
           onWillDismiss: () => {
             this.isShowGroupSort = false

@@ -12,6 +12,7 @@ import { customAnimationUtil, isON } from "../../common/utils/Animation"
 import { icon_primary } from '../Common/Common'
 import { TabContentTitleMargin } from "../../common/breakpoint/BreakPoint"
 import { common } from "@kit.AbilityKit"
+import { immersiveSurfaceColor } from "../../common/utils/ImmersiveMaterialUtil"
 
 /**
  * 提供者
@@ -381,7 +382,7 @@ export struct ProviderPage {
     .width('100%')
     .height('100%')
     .hideTitleBar(true)
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
     .onBackPressed(() => {
       return true;
     })

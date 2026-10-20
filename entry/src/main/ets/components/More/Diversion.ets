@@ -11,6 +11,11 @@ import { hilog } from "@kit.PerformanceAnalysisKit"
 import { UIConfig } from "../../entryability/AppState"
 import { customAnimationUtil } from "../../common/utils/Animation"
 import { NeedClearMoreStack, PageMargin } from "../../common/breakpoint/BreakPoint"
+import {
+  immersiveMenuMaterial,
+  immersiveSheetMaterial,
+  immersiveSurfaceColor
+} from "../../common/utils/ImmersiveMaterialUtil"
 
 @Builder
 export function DiversionBuilder(name: string, param: Object){
@@ -186,6 +191,7 @@ struct Diversion {
                 })
                 .bindContextMenu(this.FunctionMenu, ResponseType.LongPress, {
                   preview: MenuPreviewMode.IMAGE,
+                  systemMaterial: immersiveMenuMaterial(),
                   onAppear: (() => {
                     this.SelectedListItem = index
                   }),
@@ -208,7 +214,8 @@ struct Diversion {
               {
                 detents: [BIND_SHEET_CONTAINER_HEIGHT, SheetSize.LARGE],
                 dragBar: false,
-                backgroundColor: $r('app.color.background'),
+                backgroundColor: immersiveSurfaceColor($r('app.color.background')),
+                systemMaterial: immersiveSheetMaterial(),
                 scrollSizeMode: ScrollSizeMode.CONTINUOUS,
                 //keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY,
                 preferType: SheetType.CENTER,

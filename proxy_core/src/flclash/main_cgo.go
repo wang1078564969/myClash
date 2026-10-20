@@ -206,9 +206,9 @@ func getCurrentProfileName(env js.Env, this js.Value, args []js.Value) any {
 
 func setFdMap(env js.Env, this js.Value, args []js.Value) any {
 	fdInt, _ := napi.GetValueInt32(env.Env, args[0].Value)
-	go func() {
-		fdMap.Store(int64(fdInt))
-	}()
+	// JS 传参为 Fd.Id；同步唤醒等待 channel（sync.Map + 带缓冲 channel 均非阻塞，
+	// 在 JS 线程直接执行可省去 goroutine 调度延迟）
+	NotifyFdProtected(int64(fdInt))
 	return nil
 }
 

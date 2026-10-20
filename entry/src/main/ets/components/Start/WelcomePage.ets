@@ -3,6 +3,7 @@ import { UIConfig } from '../../entryability/AppState'
 import { CommonPage } from './CommonPage'
 import { customAnimationUtil } from '../../common/utils/Animation'
 import { BackButton } from '../Common/Common'
+import { immersiveSurfaceColor } from '../../common/utils/ImmersiveMaterialUtil'
 
 // 协议顶部标题
 @Builder
@@ -12,7 +13,7 @@ export function TopTitleText(t:Resource){
       .fontSize(18)
       .fontWeight(FontWeight.Bold)
   }.width('100%').justifyContent(FlexAlign.Center).alignItems(VerticalAlign.Center).height(70)
-  .backgroundColor($r('app.color.background'))
+  .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
 }
 
 
@@ -39,7 +40,7 @@ export struct WelcomeUserAgreement {
     .height('100%')
     .hideTitleBar(true)
     .navDestination(this.WelcomePagesMap)
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
   }
 
   @Builder
@@ -92,7 +93,7 @@ export struct WelcomePrivacyPolicy {
     .width('100%')
     .height('100%')
     .hideTitleBar(true)
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
     .onBackPressed(() => {
       this.welcomePageInfos.pop(true)
       return true
@@ -141,7 +142,7 @@ export struct Welcome {
       .alignContent(Alignment.TopStart)
     }
     .hideTitleBar(true)
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
   }
 
   @Builder

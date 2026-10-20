@@ -17,6 +17,11 @@ import { PopTips, PopupBuilder } from '../Start/Popup';
 import { ListGutter, ProxyListLanes } from '../../common/breakpoint/BreakPoint';
 import { cardManager } from '../../common/utils/CardManageUtil';
 import { Xb_ToastUtil } from 'xb_components';
+import {
+  immersiveMenuMaterial,
+  immersivePopupMaterial,
+  immersiveSurfaceColor
+} from '../../common/utils/ImmersiveMaterialUtil';
 
 // 组件名
 const componentName: string = 'ProxyPage'
@@ -121,6 +126,7 @@ struct ProxyGroupItem {
           {
             preview: MenuPreviewMode.IMAGE,
             placement: Placement.BottomRight,
+            systemMaterial: immersiveMenuMaterial(),
             aboutToAppear: () => {
               // js 闭包 在函数里只能拿到最后一个item的值
               // ProxyGroupItem.currentTouchProxyData = item
@@ -154,6 +160,7 @@ struct ProxyGroupItem {
             this.uiConfig.ShowProxyPop = false
             this.isShowDelayPop = true
           }),
+          systemMaterial: immersivePopupMaterial(),
           onWillDismiss: false,
           autoCancel: false
         })
@@ -452,7 +459,7 @@ struct ProxyCustomDialog {
         })
         .backgroundColor(this.icon_emphasize)
     }
-    .backgroundColor($r('app.color.container_background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.container_background')))
     .padding({
       left: 24,
       right: 24,

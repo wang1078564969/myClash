@@ -2,6 +2,12 @@ import { BIND_SHEET_DRAG_BAR_HEIGHT, BIND_SHEET_TITLE_CONTAINER_HEIGHT } from '.
 import { UIConfig } from '../../entryability/AppState'
 import { customAnimationUtil } from '../../common/utils/Animation'
 import { icon_primary } from '../Common/Common'
+import lazy { HdsTabs } from '@kit.UIDesignKit'
+import { CircleShape } from '@kit.ArkUI'
+import {
+  hdsGlassBarStyle,
+  isHdsImmersiveMaterialAvailable
+} from '../../common/utils/ImmersiveMaterialUtil'
 
 @Preview
 @Component
@@ -17,23 +23,68 @@ struct TopBuilder {
   @StorageLink('uiConfig') uiConfig: UIConfig = new UIConfig()
   /** 可选的额外 Builder，用于在标题右侧绘制自定义内容 */
   @BuilderParam extraBuilder?: () => void
+  private hdsMaterialAvailable: boolean = false
+
+  aboutToAppear(): void {
+    this.hdsMaterialAvailable = isHdsImmersiveMaterialAvailable()
+  }
+
+  @Builder
+  MaterialBackButton() {
+    Button({ type: ButtonType.Circle, stateEffect: true }) {
+      SymbolGlyph($r('sys.symbol.chevron_left'))
+        .fontSize(28)
+        .fontColor([icon_primary])
+    }
+    .width(40)
+    .height(40)
+    .translate({ y: -4 })
+    .backgroundColor(Color.Transparent)
+    .clickEffect(customAnimationUtil.isClickEffect(this.uiConfig))
+    .onClick(() => {
+      this.pathStack.pop(true)
+    })
+  }
 
   build() {
     Row() {
       if (this.showBackButton) {
-        // 返回图标
-        Button({ type: ButtonType.Circle, stateEffect: true }) {
-          SymbolGlyph($r('sys.symbol.chevron_left'))
-            .fontSize(28)
-            .fontColor([icon_primary])
+        if (this.hdsMaterialAvailable) {
+          HdsTabs({ barPosition: BarPosition.End }) {
+            TabContent() {
+            }
+            .backgroundColor(Color.Transparent)
+            .tabBar(this.MaterialBackButton)
+          }
+          .barMode(BarMode.Fixed)
+          .vertical(false)
+          .barOverlap(true)
+          .scrollable(false)
+          .barHeight(40)
+          .barBackgroundColor(Color.Transparent)
+          .barBackgroundBlurStyle(BlurStyle.NONE)
+          .barBackgroundStyle({ maskColor: Color.Transparent })
+          .backgroundColor(Color.Transparent)
+          .barFloatingStyle(hdsGlassBarStyle(40))
+          .width(40)
+          .height(40)
+          .clipShape(new CircleShape({ width: 40, height: 40 }))
+          .margin({left: 16, top: BIND_SHEET_DRAG_BAR_HEIGHT })
+        } else {
+          // 返回图标
+          Button({ type: ButtonType.Circle, stateEffect: true }) {
+            SymbolGlyph($r('sys.symbol.chevron_left'))
+              .fontSize(28)
+              .fontColor([icon_primary])
+          }
+          .width(40).height(40)
+          .margin({left: 16, top: BIND_SHEET_DRAG_BAR_HEIGHT })
+          .clickEffect(customAnimationUtil.isClickEffect(this.uiConfig))
+          .backgroundColor(this.windowMode ? Color.Transparent : $r('app.color.back'))
+          .onClick(() => {
+            this.pathStack.pop(true)
+          })
         }
-        .width(40).height(40)
-        .margin({left: 16, top: BIND_SHEET_DRAG_BAR_HEIGHT })
-        .clickEffect(customAnimationUtil.isClickEffect(this.uiConfig))
-        .backgroundColor(this.windowMode ? Color.Transparent : $r('app.color.back'))
-        .onClick(() => {
-          this.pathStack.pop(true)
-        })
       }
       Column() {
         Row() {

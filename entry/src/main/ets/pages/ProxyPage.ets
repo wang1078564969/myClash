@@ -28,6 +28,11 @@ import { getResourceString } from '../common/utils/ResourceStringUtil'
 import { RoundButton } from '../components/Common/RoundButton'
 import { cardManager } from '../common/utils/CardManageUtil'
 import { Xb_TabBarVertical, Xb_ToastUtil } from 'xb_components'
+import {
+  immersivePopupMaterial,
+  immersiveSheetMaterial,
+  immersiveSurfaceColor
+} from '../common/utils/ImmersiveMaterialUtil'
 
 
 // 定义日志组件名
@@ -350,7 +355,8 @@ struct ProxyPage {
     // 半模态页
     .bindSheet($$this.isShowProxyBindSheet, this.ProxyBindSheet(), {
       detents: [BIND_SHEET_CONTAINER_HEIGHT, SheetSize.LARGE,],
-      backgroundColor: $r('app.color.background'),
+      backgroundColor: immersiveSurfaceColor($r('app.color.background')),
+      systemMaterial: immersiveSheetMaterial(),
       dragBar: false,
       scrollSizeMode: ScrollSizeMode.CONTINUOUS,
       preferType: SheetType.CENTER,
@@ -406,6 +412,7 @@ struct ProxyPage {
       builder: PopupBuilder(this, PopTips[3], () => {
         this.isShowDelayPop = false
       }),
+      systemMaterial: immersivePopupMaterial(),
       onWillDismiss: false,
       autoCancel: false
     })
@@ -431,6 +438,7 @@ struct ProxyPage {
         builder: PopupBuilder(this, PopTips[0], () => {
           this.uiConfig.ShowStartPop = false
         }),
+        systemMaterial: immersivePopupMaterial(),
         onWillDismiss: false,
         autoCancel: false
       })

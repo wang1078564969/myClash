@@ -18,6 +18,7 @@ import { ConfigData } from "../../common/entity/PageArgumentEntity"
 import { customVibrator } from "../../common/utils/VibratorUtil"
 import { customSound } from "../../common/utils/SoundPoolUtil"
 import { UIConfig } from "../../entryability/AppState"
+import { immersiveSurfaceColor } from "../../common/utils/ImmersiveMaterialUtil"
 import { customAnimationUtil } from "../../common/utils/Animation"
 import { NavigationListPadding } from "../../common/breakpoint/BreakPoint"
 
@@ -387,7 +388,7 @@ export struct ConfigInfo {
       right: NavigationListPadding(this.widthBp, this.heightBp)
     })
     .alignItems(HorizontalAlign.Start)
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
   }
 
   aboutToAppear(): void {

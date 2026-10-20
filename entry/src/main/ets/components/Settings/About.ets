@@ -23,6 +23,7 @@ import { removeItemsByIndex } from "../../common/utils/RemoveItemsUtils"
 import { customVibrator } from "../../common/utils/VibratorUtil"
 import { customSound } from "../../common/utils/SoundPoolUtil"
 import { getResourceString } from "../../common/utils/ResourceStringUtil"
+import { immersiveMenuMaterial } from "../../common/utils/ImmersiveMaterialUtil"
 import { extractUpdateInfo, getUpdateInfo, UpdateInfo } from "../../common/utils/CheckUpdateUtil"
 import { PageMargin } from "../../common/breakpoint/BreakPoint"
 import { icon_primary } from '../Common/Common'
@@ -309,7 +310,7 @@ struct About {
                           .fontColor([icon_primary])
                           .margin({left: 7})
                       }.margin({right: 20})
-                       .bindMenu(this.UpdateMenu(itemChild.children, index))
+                       .bindMenu(this.UpdateMenu(itemChild.children, index), { systemMaterial: immersiveMenuMaterial() })
                     }.width('100%')
                     // 分割线
                     if(!isEnd(item.children!.length,i))

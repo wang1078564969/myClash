@@ -23,6 +23,7 @@ import { timestampToDateTime } from "../../common/utils/TimeConvertUtil"
 import { ProxyGroupItemDataSource } from "../../common/datasources/ProxyData"
 import { ConfigData } from "../../common/entity/PageArgumentEntity"
 import { PrivacyPolicy, UserAgreement } from "./AgreementPrivacyPage"
+import { immersiveSurfaceColor } from "../../common/utils/ImmersiveMaterialUtil"
 import { PageMargin } from "../../common/breakpoint/BreakPoint"
 import { UpdateLog } from '../Start/UpdateLog';
 import { EventHub, EventKey } from '../../common/EventHub';
@@ -353,7 +354,7 @@ struct OfflineDetail {
       }
 
     }.width('100%')
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
     .hideTitleBar(true)
     .onBackPressed(() => {
       this.SettingsPageInfos.clear();

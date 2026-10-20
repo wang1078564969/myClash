@@ -21,6 +21,7 @@ import { NavigationListPadding } from "../../common/breakpoint/BreakPoint";
 import { ConfigData } from "../../common/entity/PageArgumentEntity";
 import { scanCore, scanBarcode } from '@kit.ScanKit'; // 导入默认界面扫码
 import { BusinessError } from '@kit.BasicServicesKit';
+import { immersiveTitleBarMaterial } from '../../common/utils/ImmersiveMaterialUtil';
 
 interface ConfigAddType {
   symbolStart? : Resource,
@@ -142,6 +143,7 @@ export struct ConfigAdd {
         },
         {
           // barStyle: BarStyle.STACK,
+          systemMaterial: immersiveTitleBarMaterial()
         })
       .height(BIND_SHEET_CONTAINER_HEIGHT)
       .mode(NavigationMode.Stack)

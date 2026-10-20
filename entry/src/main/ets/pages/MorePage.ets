@@ -30,6 +30,7 @@ import { customAnimationUtil } from '../common/utils/Animation';
 import { ListItemMarginValue, MoreNavMode, NeedClearMoreStack, TabBarVertical } from '../common/breakpoint/BreakPoint';
 import { AccessControl } from '../components/More/AccessControl/AccessControl';
 import { EventKey, EventHub } from '../common/EventHub';
+import { immersiveSheetMaterial, immersiveSurfaceColor } from '../common/utils/ImmersiveMaterialUtil';
 
 const componentName: string = 'MorePage'
 
@@ -154,7 +155,8 @@ struct MorePage {
           .bindSheet($$this.isShowSettings, this.SettingsSheet(), {
             detents: [BIND_SHEET_CONTAINER_HEIGHT, SheetSize.LARGE],
             dragBar: false,
-            backgroundColor: $r('app.color.background'),
+            backgroundColor: immersiveSurfaceColor($r('app.color.background')),
+            systemMaterial: immersiveSheetMaterial(),
             keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY,
             scrollSizeMode: ScrollSizeMode.CONTINUOUS,
             preferType: SheetType.CENTER,
@@ -367,7 +369,7 @@ export struct theQueryIPDialog {
         .fontColor(Color.White)
     }
     .padding({left: 16, right: 16, bottom: 16})
-    .backgroundColor($r('app.color.container_background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.container_background')))
     .width('100%')
   }
 }

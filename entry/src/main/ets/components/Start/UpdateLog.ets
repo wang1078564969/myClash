@@ -4,6 +4,7 @@ import { LIST_ITEM_HEIGHT, TCItemProp } from "../../common/entity/Constants"
 import { customAnimationUtil } from "../../common/utils/Animation"
 import { AppState, UIConfig } from "../../entryability/AppState"
 import TopBuilder from "../Settings/TopBuilder"
+import { immersiveSurfaceColor } from "../../common/utils/ImmersiveMaterialUtil"
 
 @Component
 export struct UpdateLog {
@@ -37,7 +38,7 @@ export struct UpdateLog {
           logoImage: $r('app.media.background_white_large'),
           logoImageBg: $r("app.media.foreground_box_cat_large"),
           appNameImage: $r("app.media.clash_box_blue"),
-          listItemGroupBgColor: $r('app.color.container_background'),
+          listItemGroupBgColor: immersiveSurfaceColor($r('app.color.container_background')),
           versionName: `${AppState.versionName}(${AppState.versionCode})`,
           updateLog: UpdateLogData,
           alignRow: VerticalAlign.Bottom,
@@ -65,7 +66,7 @@ export struct UpdateLog {
     .hideTitleBar(true)
     .hideBackButton(true)
     .hideToolBar(true)
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
     .onBackPressed(() => {
       this.SettingsPageInfos.pop()
       return true

@@ -44,6 +44,12 @@ import { ShareData, Xb_GetResourceString,
   Xb_Share, Xb_TabBarVertical, Xb_ToastUtil } from 'xb_components'
 import { QRCodeDialog } from '../components/Configuration/QRCodeComponent'
 import { JSON } from '@kit.ArkTS'
+import {
+  immersiveMenuMaterial,
+  immersivePopupMaterial,
+  immersiveSheetMaterial,
+  immersiveSurfaceColor
+} from '../common/utils/ImmersiveMaterialUtil'
 
 
 /**
@@ -233,6 +239,7 @@ struct ConfigurationPage {
                       preview: MenuPreviewMode.IMAGE,
                       previewAnimationOptions: { scale: [1.0, 1.1] },
                       placement: Placement.BottomRight,
+                      systemMaterial: immersiveMenuMaterial(),
                       aboutToAppear: () => {
                         if (this.uiConfig.isVibrate) {
                           customVibrator.vibratorTriggerOfHapticClockTimer()
@@ -283,6 +290,7 @@ struct ConfigurationPage {
                     builder: PopupBuilder(this, PopTips[1], () => {
                       this.uiConfig.ShowConfigPop = false
                     }),
+                    systemMaterial: immersivePopupMaterial(),
                     onWillDismiss: false,
                     autoCancel: false
                   })
@@ -349,7 +357,8 @@ struct ConfigurationPage {
     // .animation({ duration: this.uiConfig.animationSpeed, curve: Curve.Linear, delay: 0 })
     .bindSheet($$this.isShowConfigAddBindSheet, this.ConfigAddBindSheetBuilder(), {
       detents: [BIND_SHEET_CONTAINER_HEIGHT, SheetSize.LARGE,], // SheetSize.LARGE
-      backgroundColor: $r('app.color.background'),
+      backgroundColor: immersiveSurfaceColor($r('app.color.background')),
+      systemMaterial: immersiveSheetMaterial(),
       showClose: this.isShowQRCode ? false : true,
       dragBar: false,
       preferType: SheetType.CENTER,
@@ -444,7 +453,7 @@ struct ConfigurationPage {
     autoCancel: true,
     alignment: DialogAlignment.Center,
     width: 328,
-    backgroundColor: $r('app.color.list_item_background_color'),
+    backgroundColor: immersiveSurfaceColor($r('app.color.list_item_background_color')),
   })
 
   /**

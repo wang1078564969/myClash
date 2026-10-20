@@ -36,6 +36,11 @@ import { ProxyGroupItemDataSource, ProxyItemDataSource } from '../common/datasou
 import { EventHub, EventKey } from '../common/EventHub'
 import { PopTips, PopupBuilder } from '../components/Start/Popup'
 import { getResourceString } from '../common/utils/ResourceStringUtil'
+import {
+  immersivePopupMaterial,
+  immersiveSheetMaterial,
+  immersiveSurfaceColor
+} from '../common/utils/ImmersiveMaterialUtil'
 import { TopBar } from '../components/Common/TopBar'
 import {
   HomeCardDeleteButtonSize,
@@ -283,6 +288,7 @@ struct Home {
               builder: PopupBuilder(this, PopTips[0], () => {
                 this.uiConfig.ShowStartPop = false
               }),
+              systemMaterial: immersivePopupMaterial(),
               onWillDismiss: false,
               autoCancel: false
             })
@@ -296,7 +302,8 @@ struct Home {
         detents: [BIND_SHEET_CONTAINER_HEIGHT, SheetSize.LARGE],
         preferType: SheetType.CENTER,
         scrollSizeMode: ScrollSizeMode.CONTINUOUS,
-        backgroundColor: $r('app.color.background'),
+        backgroundColor: immersiveSurfaceColor($r('app.color.background')),
+        systemMaterial: immersiveSheetMaterial(),
         dragBar: false,
         title: this.isShowCardEdit && !this.showCardSort ? { title: $r('app.string.add_home_card') } : undefined,
         keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY,
@@ -722,7 +729,7 @@ struct SaveCustomDialog {
     .width('100%')
     .height(undefined)
     .justifyContent(FlexAlign.Center)
-    .backgroundColor($r('app.color.container_background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.container_background')))
     .padding({ top: 16, bottom: 16 })
   }
 

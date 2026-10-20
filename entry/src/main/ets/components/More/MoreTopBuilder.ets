@@ -2,8 +2,14 @@ import { BreakpointState } from "../../common/breakpoint/breakpointsystem"
 import { TAB_CONTENT_TITLE_FONT_SIZE, TAB_CONTENT_TITLE_HEIGHT } from "../../common/entity/Constants"
 import { UIConfig } from "../../entryability/AppState"
 import { customAnimationUtil } from "../../common/utils/Animation"
-import { SymbolGlyphModifier } from "@kit.ArkUI"
+import { CircleShape, SymbolGlyphModifier } from "@kit.ArkUI"
+import lazy { HdsTabs } from "@kit.UIDesignKit"
 import { ButtonBuilder, icon_primary } from '../Common/Common'
+import {
+  hdsGlassBarStyle,
+  immersiveMenuMaterial,
+  isHdsImmersiveMaterialAvailable
+} from '../../common/utils/ImmersiveMaterialUtil'
 import { NeedClearMoreStack, PageMargin, WindowModeMoreTitleFontSize } from "../../common/breakpoint/BreakPoint"
 
 /**
@@ -39,6 +45,7 @@ export struct MoreTop {
 
   @StorageProp('WindowMode') windowMode: boolean = false
   @Prop enableClick2: boolean = true
+  private hdsMaterialAvailable: boolean = false
   /** 主题色 */
   @Consume('icon_emphasize') icon_emphasize: ResourceColor
 
@@ -57,7 +64,43 @@ export struct MoreTop {
   onClick1: () => void = () => {}
   onClick2: () => void = () => {}
 
+  aboutToAppear(): void {
+    this.hdsMaterialAvailable = isHdsImmersiveMaterialAvailable()
+  }
+
   build() {
+    this.MoreTopRow()
+  }
+
+  @Builder
+  HdsBackButton() {
+    Button({ type: ButtonType.Circle, stateEffect: true }) {
+      SymbolGlyph($r('sys.symbol.chevron_left'))
+        .fontSize(28)
+        .fontColor([icon_primary])
+    }
+    .width(40)
+    .height(40)
+    .translate({ y: -4 })
+    .backgroundColor(Color.Transparent)
+    .onClick(() => {
+      this.back()
+    })
+  }
+
+  back() {
+    if (this.widthBp < 2) {
+      this.pageInfos.pop(true)
+    } else {
+      this.morePageInfos.pop(true)
+    }
+    if (this.pageInfos.size() <= 1) {
+      this.isSecondary = false
+    }
+  }
+
+  @Builder
+  MoreTopRow() {
     Row() {
       if (this.isSearching) {
         Search({ value: this.searchText, placeholder: $r('app.string.enter_search')})
@@ -86,25 +129,41 @@ export struct MoreTop {
       } else {
         if (NeedClearMoreStack(this.widthBp, this.heightBp) || this.needBackButton) {
           // 返回图标
-          Button({ type: ButtonType.Circle, stateEffect: true }) {
-            SymbolGlyph($r('sys.symbol.chevron_left'))
-              .fontSize(28)
-              .fontColor([icon_primary])
+          if (this.hdsMaterialAvailable) {
+            HdsTabs({ barPosition: BarPosition.End }) {
+              TabContent() {
+              }
+              .backgroundColor(Color.Transparent)
+              .tabBar(this.HdsBackButton)
+            }
+            .barMode(BarMode.Fixed)
+            .vertical(false)
+            .barOverlap(true)
+            .scrollable(false)
+            .barHeight(40)
+            .barBackgroundColor(Color.Transparent)
+            .barBackgroundBlurStyle(BlurStyle.NONE)
+            .barBackgroundStyle({ maskColor: Color.Transparent })
+            .backgroundColor(Color.Transparent)
+            .barFloatingStyle(hdsGlassBarStyle(40))
+            .width(40)
+            .height(40)
+            .clipShape(new CircleShape({ width: 40, height: 40 }))
+            .transition(customAnimationUtil.isSlide(200, this.uiConfig))
+          } else {
+            Button({ type: ButtonType.Circle, stateEffect: true }) {
+              SymbolGlyph($r('sys.symbol.chevron_left'))
+                .fontSize(28)
+                .fontColor([icon_primary])
+            }
+            .transition(customAnimationUtil.isSlide(200, this.uiConfig))
+            .width(40)
+            .height(40)
+            .backgroundColor($r('app.color.settings_container_background'))
+            .onClick(() => {
+              this.back()
+            })
           }
-          .transition(customAnimationUtil.isSlide(200, this.uiConfig))
-          .width(40)
-          .height(40)
-          .backgroundColor($r('app.color.settings_container_background'))
-          .onClick(() => {
-            if (this.widthBp < 2) {
-              this.pageInfos.pop(true)
-            } else {
-              this.morePageInfos.pop(true)
-            }
-            if (this.pageInfos.size() <= 1) {
-              this.isSecondary = false
-            }
-          })
         }
 
         Column() {
@@ -134,6 +193,7 @@ export struct MoreTop {
               icon: $r('sys.symbol.magnifyingglass'),
               iconSize: this.windowMode ? 18 : 24,
               iconWeight: this.windowMode ? FontWeight.Bold : undefined,
+              useSystemMaterial: true,
               onCheck: () => {
                 this.isSearching = true
               }
@@ -150,6 +210,7 @@ export struct MoreTop {
               icon: this.icon1,
               iconSize: this.windowMode ? 18 : 24,
               iconWeight: this.windowMode ? FontWeight.Bold : undefined,
+              useSystemMaterial: true,
               onCheck: () => {
                 this.onClick1()
               }
@@ -167,6 +228,7 @@ export struct MoreTop {
               enableClick: this.enableClick2,
               iconSize: this.windowMode ? 18 : 24,
               iconWeight: this.windowMode ? FontWeight.Bold : undefined,
+              useSystemMaterial: true,
               onCheck: () => {
                 this.onClick2()
               }
@@ -174,11 +236,12 @@ export struct MoreTop {
           }
           .height('100%')
           .alignItems(this.windowMode ? VerticalAlign.Top : VerticalAlign.Center)
-          .bindMenu(this.enableClick2 ? undefined : this.theMenu())
+          .bindMenu(this.enableClick2 ? undefined : this.theMenu(), { systemMaterial: immersiveMenuMaterial() })
           .transition(customAnimationUtil.isSlide(0, this.uiConfig))
         }
       }
-    }.zIndex(1)
+    }
+    .zIndex(1)
     .width('100%')
     .layoutWeight(1)
     .position({x: 0})

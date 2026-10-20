@@ -14,6 +14,7 @@ import { customVibrator } from '../../common/utils/VibratorUtil'
 import { customAnimationUtil } from '../../common/utils/Animation'
 import { HomeCardFontSize, HomeCardPadding, TabContentTitleMargin } from '../../common/breakpoint/BreakPoint'
 import { Xb_GoToWeb } from 'xb_components/src/main/ets/utils/JumpTo'
+import { immersiveSheetMaterial, immersiveSurfaceColor } from '../../common/utils/ImmersiveMaterialUtil'
 
 @Component
 struct Shortcuts {
@@ -99,7 +100,8 @@ struct Shortcuts {
     .bindSheet($$this.isShowShortcutsEdit, this.ShortcutsEdit(), {
       detents: [BIND_SHEET_CONTAINER_HEIGHT, SheetSize.LARGE,],
       preferType: SheetType.CENTER,
-      backgroundColor: $r('app.color.background'),
+      backgroundColor: immersiveSurfaceColor($r('app.color.background')),
+      systemMaterial: immersiveSheetMaterial(),
       showClose: true,
       dragBar: false,
       scrollSizeMode: ScrollSizeMode.CONTINUOUS,
@@ -462,7 +464,7 @@ struct WebCustomDialog1 {
                 }
               })
           }
-      }.backgroundColor($r('app.color.container_background'))
+      }.backgroundColor(immersiveSurfaceColor($r('app.color.container_background')))
       .width('100%')
       .padding({
         top: 15,
@@ -535,7 +537,7 @@ struct WebCustomDialog2 {
               }
             })
         }
-    } .width('100%').padding({top:15,bottom:15,left:24,right:24}).backgroundColor($r('app.color.container_background'))
+    } .width('100%').padding({top:15,bottom:15,left:24,right:24}).backgroundColor(immersiveSurfaceColor($r('app.color.container_background')))
   }
 }
 
@@ -600,7 +602,7 @@ struct WebCustomDialog3 {
               }
             })
         }
-    } .width('100%').padding({top:15,bottom:15,left:24,right:24}).backgroundColor($r('app.color.container_background'))
+    } .width('100%').padding({top:15,bottom:15,left:24,right:24}).backgroundColor(immersiveSurfaceColor($r('app.color.container_background')))
   }
 }
 

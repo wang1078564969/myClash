@@ -1,0 +1,19 @@
+diff --git a/pkg/tcpip/link/fdbased/endpoint.go b/pkg/tcpip/link/fdbased/endpoint.go
+index e2cbcd6e7400..111111111111 100644
+--- a/pkg/tcpip/link/fdbased/endpoint.go
++++ b/pkg/tcpip/link/fdbased/endpoint.go
+@@ -470,11 +470,12 @@ func setFanout(fd int, fanoutArg int) error {
+ }
+
+ // IsSocketFD checks if the FD is a socket.
+ func IsSocketFD(fd int) (bool, error) {
+ 	var stat unix.Stat_t
++	// harmonyos next not permission
+ 	if err := unix.Fstat(fd, &stat); err != nil {
+-		return false, fmt.Errorf("unix.Fstat(%v,...) failed: %v", fd, err)
++		return false, nil
+ 	}
+ 	return (stat.Mode & unix.S_IFSOCK) == unix.S_IFSOCK, nil
+ }
+
+ // Attach launches the goroutine that reads packets from the file descriptor and

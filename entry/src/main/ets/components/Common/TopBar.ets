@@ -48,6 +48,7 @@ export struct TopBar {
             icon: this.icons[0],
             iconSize: this.iconSize,
             iconWeight: this.windowMode ? FontWeight.Bold : undefined,
+            useSystemMaterial: true,
             onCheck: () => { this.onFClick() }
           }).transition(customAnimationUtil.isSlide(100, this.uiConfig))
         }
@@ -57,6 +58,7 @@ export struct TopBar {
             icon: this.icons[1],
             iconSize: this.iconSize,
             iconWeight: this.windowMode ? FontWeight.Bold : undefined,
+            useSystemMaterial: true,
             onCheck: () => { this.onSClick() }
           }).transition(customAnimationUtil.isSlide(0, this.uiConfig))
         }
@@ -66,6 +68,7 @@ export struct TopBar {
             icon: this.icons[2],
             iconSize: this.iconSize,
             iconWeight: this.windowMode ? FontWeight.Bold : undefined,
+            useSystemMaterial: true,
             onCheck: () => { this.onTClick() }
           }).transition(customAnimationUtil.isSlide(0, this.uiConfig))
         }
@@ -75,6 +78,7 @@ export struct TopBar {
             icon: this.icons[3],
             iconSize: this.iconSize,
             iconWeight: this.windowMode ? FontWeight.Bold : undefined,
+            useSystemMaterial: true,
             onCheck: () => { this.onFoClick() }
           }).transition(customAnimationUtil.isSlide(0, this.uiConfig))
         }

@@ -98,6 +98,11 @@ import { AccessControlCompatibleMerger } from '../common/utils/AccessControlComp
 import { PCIndex } from './PCIndex';
 import { accessControlRdb, AppInfo, ListType } from '../common/datasources/AccessControlRdb';
 import { FloatBar } from '../components/Common/FloatBar';
+import {
+  immersiveSheetMaterial,
+  immersiveSurfaceColor,
+  immersiveTabBarMaterial
+} from '../common/utils/ImmersiveMaterialUtil';
 
 export const indexController: TabsController = new TabsController()
 const swiperController: SwiperController = new SwiperController()
@@ -122,6 +127,7 @@ struct Index {
   @StorageLink('windowHeight') @Watch('onWindowChange') windowHeight: number = 0
   // 应用窗口宽度
   @StorageLink('windowWidth') @Watch('onWindowChange') windowWidth: number = 0
+  @StorageProp('EnableUIMaterial') enableUIMaterial: boolean = false
   // 左侧避让宽度
   @StorageProp('LeftAvoidWidth') leftAvoidWidth: number = 0
   // 右侧避让宽度
@@ -331,6 +337,14 @@ struct Index {
 
   build() {
     Stack({ alignContent: Alignment.TopEnd }) {
+      // 沉浸光感修复：非全屏布局下，背景层延伸绘制至安全区外（状态栏/导航条区域）
+      if (this.uiConfig.tabStyle != 'window') {
+        Column()
+          .width('100%')
+          .height('100%')
+          .backgroundColor($r('app.color.background'))
+          .expandSafeArea([SafeAreaType.SYSTEM])
+      }
       // 窗口控制器(窗口模式显示)
       if (this.windowMode && !this.isSearching) {
         WindowTopBar()
@@ -364,7 +378,8 @@ struct Index {
       showClose: (AppStorage.get<boolean>('crash') === true && !this.uiConfig.isFirstStart) ||
         this.appLinkConfigUrl != '' || (this.uiConfig.oldVersionCode !== AppState.versionCode && !this.uiConfig.isFirstStart) || this.showUpdateLog,
       dragBar: false,
-      backgroundColor: $r('app.color.background'),
+      backgroundColor: immersiveSurfaceColor($r('app.color.background')),
+      systemMaterial: immersiveSheetMaterial(),
       keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY,
       scrollSizeMode: ScrollSizeMode.CONTINUOUS,
       preferType: SheetType.CENTER,
@@ -445,6 +460,33 @@ struct Index {
     .height('100%')
     .padding({ top: 8 })
   }
+  /** 仅底部横向 TabBar 支持沉浸光感 */
+  useImmersiveBottomTabBar(): boolean {
+    return this.enableUIMaterial && this.windowWidth > 0 && !TabBarVertical(this.widthBp, this.heightBp) &&
+      TabBarPosition(this.widthBp, this.heightBp) === BarPosition.End
+  }
+
+  /** 锁定三个断点的栏宽为窗口宽度，避免系统按断点改写悬浮页签栏宽度 */
+  getImmersiveTabBarStyle(): FloatingTabBarStyle | undefined {
+    if (!this.useImmersiveBottomTabBar()) {
+      return undefined
+    }
+    const material = immersiveTabBarMaterial()
+    if (material === undefined) {
+      return undefined
+    }
+    return {
+      barWidth: {
+        smallBarWidth: this.windowWidth,
+        mediumBarWidth: this.windowWidth,
+        largeBarWidth: this.windowWidth
+      },
+      barSideMargin: 0,
+      barBottomMargin: 0,
+      systemMaterial: material
+    }
+  }
+
   @Builder
   CustomTab() {
     Tabs({
@@ -476,7 +518,8 @@ struct Index {
     }
     .zIndex(1)
     .backgroundColor($r('app.color.background'))
-    .barOverlap(false)
+    .barOverlap(this.useImmersiveBottomTabBar())
+    .barFloatingStyle(this.getImmersiveTabBarStyle())
     .scrollable(!this.isSecondary)
     .vertical(TabBarVertical(this.widthBp, this.heightBp))
     .barWidth(this.windowMode ? WindowTabBarWidth(this.widthBp, this.heightBp) :

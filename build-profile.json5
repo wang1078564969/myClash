@@ -5,26 +5,13 @@
         "name": "debug",
         "type": "HarmonyOS",
         "material": {
-          "certpath": "/Users/xiaobai/.ohos/config/debug_ClashNEXT_M3PM-oolzOYP-75We9OVco6Ti7Bq5kXGy-eK73DtKFU=.cer",
+          "certpath": "/Users/nitoo/.ohos/config/debug_ClashBox_8idfnkrAiKBiprmTeynK1xUEKzuSpOnY4Vgp0WPpmaE=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001BAE658DBC9FF8BB560AFF168412F967ADA1CCD0AF99EA25960CE1592D7B6DA2BEC8CE4A50967222",
-          "profile": "/Users/xiaobai/.ohos/config/debug_ClashNEXT_M3PM-oolzOYP-75We9OVco6Ti7Bq5kXGy-eK73DtKFU=.p7b",
+          "keyPassword": "0000001BE1FBEB1A14B91F11679C6B9228C604D9201BF7AA464E79407D13F3175E935B3D16F88A890836D5",
+          "profile": "/Users/nitoo/.ohos/config/debug_ClashBox_8idfnkrAiKBiprmTeynK1xUEKzuSpOnY4Vgp0WPpmaE=.p7b",
           "signAlg": "SHA256withECDSA",
-          "storeFile": "/Users/xiaobai/.ohos/config/debug_ClashNEXT_M3PM-oolzOYP-75We9OVco6Ti7Bq5kXGy-eK73DtKFU=.p12",
-          "storePassword": "0000001B35F91E73409F39D6F1624D7609C8324F020F5F14EE9874575383E5E66D629C870D216CE40B0191"
-        }
-      },
-      {
-        "name": "release",
-        "type": "HarmonyOS",
-        "material": {
-          "certpath": "D:/HUAWEI/key/小白工坊证书/小白工坊.cer",
-          "keyAlias": "xiaobaigongfang",
-          "keyPassword": "0000001DB26F4D6B09A2214BE9D49BCB53A46294ACC078516F41B1DCBCD216D497E30283AD1E4E596CBF29FED6",
-          "profile": "D:/HUAWEI/key/小白工坊证书/ClashBoxreleaseRelease.p7b",
-          "signAlg": "SHA256withECDSA",
-          "storeFile": "D:/HUAWEI/key/小白工坊证书/小白工坊.p12",
-          "storePassword": "0000001D0CF731FF829D831CCFB9C6A3371D2B8A62D4D51B21CE1740BA33E51FE15CDE3D5F2C7A70287725DF26"
+          "storeFile": "/Users/nitoo/.ohos/config/debug_ClashBox_8idfnkrAiKBiprmTeynK1xUEKzuSpOnY4Vgp0WPpmaE=.p12",
+          "storePassword": "0000001B0F44BADF99A86EF48D5A0E9F277A25EAFB7BFA823825B6C9C81D67FDE32DD92E9F30A89F90E5D8"
         }
       }
     ],
@@ -34,7 +21,7 @@
         "name": "default",
         "signingConfig": "debug",
         "compatibleSdkVersion": "5.0.5(17)",
-        "targetSdkVersion": "6.0.0(20)",
+        "targetSdkVersion": "26.0.0",
         "runtimeOS": "HarmonyOS",
         "buildOption": {
           "strictMode": {
@@ -46,14 +33,15 @@
               "arm64-v8a",
               "x86_64"
             ]
-          }
+          },
+          "nativeCompiler": "BiSheng"
         }
       },
       {
         "name": "release",
-        "signingConfig": "release",
+        "signingConfig": "debug",
         "compatibleSdkVersion": "5.0.5(17)",
-        "targetSdkVersion": "6.0.0(20)",
+        "targetSdkVersion": "26.0.0",
         "runtimeOS": "HarmonyOS",
         "buildOption": {
           "strictMode": {

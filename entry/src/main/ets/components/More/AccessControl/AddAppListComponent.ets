@@ -10,6 +10,7 @@ import { UIConfig } from '../../../entryability/AppState'
 import { BindSheetTitleCustomBuilder, skipRowList } from '../../Common/Common'
 import { hilog } from '@kit.PerformanceAnalysisKit'
 import { NavigationListPadding } from '../../../common/breakpoint/BreakPoint'
+import { immersiveTitleBarMaterial } from '../../../common/utils/ImmersiveMaterialUtil'
 
 @Component
 export struct AddAppListComponent {
@@ -88,6 +89,9 @@ export struct AddAppListComponent {
           menus: []
         }),
         height: BIND_SHEET_TITLE_CONTAINER_HEIGHT + BIND_SHEET_DRAG_BAR_HEIGHT
+      },
+      {
+        systemMaterial: immersiveTitleBarMaterial()
       })
     .mode(NavigationMode.Stack)
     .hideBackButton(true)

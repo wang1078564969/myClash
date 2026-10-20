@@ -5,6 +5,7 @@ import { UIConfig } from '../../../entryability/AppState'
 import { customAnimationUtil } from '../../../common/utils/Animation'
 import { ItemRestriction, SegmentButton, SegmentButtonOptions, SegmentButtonTextItem } from '@kit.ArkUI'
 import { ANIMATION_DURATION_300 } from '../../../common/entity/Constants'
+import { immersiveSurfaceColor } from '../../../common/utils/ImmersiveMaterialUtil'
 
 const TAG = "SubmitAppDialog"
 
@@ -281,7 +282,7 @@ struct SubmitAppDialog {
       top: 15,
       bottom: 15
     })
-    .backgroundColor($r('app.color.container_background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.container_background')))
     .width('100%')
   }
 

@@ -165,6 +165,13 @@
       }*/
     ],
     // 指定路由映射json文件
-    "routerMap": "$profile:route_map"
+    "routerMap": "$profile:route_map",
+    // 沉浸光感（液态玻璃）应用级开关：弹窗/菜单/吐司/选择器/开关/滑块/选择类弹窗等系统组件默认开启沉浸式系统材质
+    "metadata": [
+      {
+        "name": "ohos.arkui.UIMaterial.state",
+        "value": "enable"
+      }
+    ]
   }
 }

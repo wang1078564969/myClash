@@ -1,6 +1,6 @@
 import { AbilityConstant, ConfigurationConstant, UIAbility, Want, Configuration, common } from '@kit.AbilityKit';
 import { hiAppEvent, hilog } from '@kit.PerformanceAnalysisKit';
-import { window } from '@kit.ArkUI';
+import { uiMaterial, window } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
 import ClashViewModel from './ClashViewModel';
 import { AppConfig, AppState, ClashCore } from './AppState';
@@ -191,6 +191,7 @@ export default class EntryAbility extends UIAbility {
     } else {
       AppStorage.setOrCreate('EnableAPIVersion', false)
     }
+    this.updateUIMaterialState('onWindowStageCreate')
 
     // 设置自动记忆最后关闭的窗口大小(仅2in1设备生效)
     try {
@@ -236,6 +237,9 @@ export default class EntryAbility extends UIAbility {
         const data = await windowStage.getMainWindow()
         // 确保UI上下文被赋值
         this.uiContext = data.getUIContext()
+        // UI 上下文就绪后再取一次材质能力，避免窗口阶段早期读到默认状态
+        this.updateUIMaterialState('contentLoaded')
+        setTimeout(() => this.updateUIMaterialState('delayed'), 1000)
         // 设置窗口背景色为透明
         try {
           data.setWindowBackgroundColor('#00000000');
@@ -243,11 +247,12 @@ export default class EntryAbility extends UIAbility {
           console.error(`WindowBackgroundColor  Failed to set the background color. Cause code: ${exception.code}, message: ${exception.message}`);
         };
         if (APIVersion >= 20) {
-          try {
-            data.setWindowContainerColor('#00000000', '#FFF1F3F5')
-          } catch (exception) {
-            console.error(`WindowBackgroundColor  Failed to set the container color. code: ${exception.code}, message: ${exception.message}`);
-          };
+          // 非全屏布局下系统栏区域背景由 Index.ets 背景层(expandSafeArea)统一绘制，无需容器色
+          // try {
+          //   data.setWindowContainerColor('#00000000', '#FFF1F3F5')
+          // } catch (exception) {
+          //   console.error(`WindowBackgroundColor  Failed to set the container color. code: ${exception.code}, message: ${exception.message}`);
+          // };
         }
         // 初始化通知工具
         Xb_ToastUtil.initContext(this.uiContext, data.getUIContext().getHostContext() as common.UIAbilityContext)
@@ -301,6 +306,19 @@ export default class EntryAbility extends UIAbility {
       AppStorage.setOrCreate('2in1', false)
     }
 
+  }
+
+  private updateUIMaterialState(tag: string): void {
+    const apiVersion = deviceInfo.sdkApiVersion
+    if (apiVersion < 26) {
+      AppStorage.setOrCreate('EnableUIMaterial', false)
+      return
+    }
+    const supported = uiMaterial.isImmersiveMaterialSupported()
+    const level = uiMaterial.getGlobalMaterialLevel()
+    const state = uiMaterial.getMaterialInfo().state
+    hilog.info(0xFF00, 'ImmersiveMaterial', `${tag}: supported=${supported}, level=${level}, state=${state}`)
+    AppStorage.setOrCreate('EnableUIMaterial', supported)
   }
 
   onWindowStageWillDestroy(windowStage: window.WindowStage): void {
@@ -624,12 +642,15 @@ export default class EntryAbility extends UIAbility {
   private async intRectWindow(windowStage: window.WindowStage) {
     // 获取应用主窗口
     let windowClass: window.Window = windowStage.getMainWindowSync();
-    // 设置窗口全屏
-    windowClass.setWindowLayoutFullScreen(true).then(() => {
-      console.info('Succeeded in setting the window layout to full-screen mode.');
-    }).catch((err: BusinessError) => {
-      console.error('Failed to set the window layout to full-screen mode. Cause:' + JSON.stringify(err));
-    });
+    // 注意：不可调用 setWindowLayoutFullScreen(true)，全屏布局会禁用沉浸光感材质渲染
+    // （菜单/弹窗/吐司无玻璃效果）。当前采用默认非全屏布局：
+    // 布局避让由系统安全区处理，Index.ets 背景层 expandSafeArea 延伸绘制系统栏区域，
+    // Xb_AvoidanceManager 检测非全屏时归零手动避让值。
+    // windowClass.setWindowLayoutFullScreen(true).then(() => {
+    //   console.info('Succeeded in setting the window layout to full-screen mode.');
+    // }).catch((err: BusinessError) => {
+    //   console.error('Failed to set the window layout to full-screen mode. Cause:' + JSON.stringify(err));
+    // });
 
     // 缓存window窗口对象
     AppStorage.setOrCreate('WindowClass', windowClass)

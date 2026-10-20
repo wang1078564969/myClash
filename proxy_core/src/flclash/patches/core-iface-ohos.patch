@@ -1,0 +1,82 @@
+diff --git a/component/iface/anet/interface.go b/component/iface/anet/interface.go
+index 6068b03..e0c0bbf 100644
+--- a/component/iface/anet/interface.go
++++ b/component/iface/anet/interface.go
+@@ -1,4 +1,4 @@
+-//go:build !android
++//go:build !android && !ohos
+ 
+ package anet
+ 
+diff --git a/component/iface/anet/interface_ohos.go b/component/iface/anet/interface_ohos.go
+new file mode 100644
+index 0000000..0be1420
+--- /dev/null
++++ b/component/iface/anet/interface_ohos.go
+@@ -0,0 +1,44 @@
++//go:build ohos
++
++package anet
++
++import (
++	"net"
++	"sync"
++)
++
++var (
++	injectedMu   sync.RWMutex
++	injectedIfas []net.Interface
++)
++
++// SetNetInterfaces 由宿主(HarmonyOS 应用侧)注入网络接口信息。
++// OHOS 沙箱内 net.Interfaces() 可能无法获取完整信息(如 MAC 地址)，
++// 由应用侧通过系统 API 读取后注入；未注入时回退到系统调用。
++func SetNetInterfaces(ifas []net.Interface) {
++	injectedMu.Lock()
++	defer injectedMu.Unlock()
++	injectedIfas = ifas
++}
++
++// Interfaces returns a list of the system's network interfaces.
++func Interfaces() ([]net.Interface, error) {
++	injectedMu.RLock()
++	defer injectedMu.RUnlock()
++	if len(injectedIfas) > 0 {
++		return injectedIfas, nil
++	}
++	return net.Interfaces()
++}
++
++// InterfaceAddrs returns a list of the system's unicast interface
++// addresses.
++func InterfaceAddrs() ([]net.Addr, error) {
++	return net.InterfaceAddrs()
++}
++
++// InterfaceAddrsByInterface returns a list of the system's unicast
++// interface addresses by specific interface.
++func InterfaceAddrsByInterface(ifi *net.Interface) ([]net.Addr, error) {
++	return ifi.Addrs()
++}
+diff --git a/component/iface/patch_ohos.go b/component/iface/patch_ohos.go
+new file mode 100644
+index 0000000..8078716
+--- /dev/null
++++ b/component/iface/patch_ohos.go
+@@ -0,0 +1,16 @@
++//go:build ohos
++
++package iface
++
++import (
++	"net"
++
++	"github.com/metacubex/mihomo/component/iface/anet"
++)
++
++// SetNetInterfaces 保持与旧内核(ClashBox fork)一致的接口注入 API：
++// 应用侧从 HarmonyOS 系统 API 读取接口信息后注入内核。
++// 实际存储在 anet 包(见 anet/interface_ohos.go)。
++func SetNetInterfaces(interfaces []net.Interface) {
++	anet.SetNetInterfaces(interfaces)
++}

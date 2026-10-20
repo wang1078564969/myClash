@@ -11,6 +11,7 @@ import { BindSheetTitleCustomBuilder } from "../Common/Common"
 import { hilog } from "@kit.PerformanceAnalysisKit"
 import { getResourceString } from "../../common/utils/ResourceStringUtil"
 import { NavigationListPadding } from "../../common/breakpoint/BreakPoint"
+import { immersiveSurfaceColor } from "../../common/utils/ImmersiveMaterialUtil"
 
 
 // 关联：route_map.json
@@ -53,7 +54,7 @@ export struct CreateNewConfig{
         mainTitleFontWeight: BIND_SHEET_MAIN_FONT_WEIGHT,
         mainTitleFontSize: BIND_SHEET_MAIN_FONTSIZE,
         subTitleFontSize: BIND_SHEET_SUB_FONTSIZE,
-        titleBackgroundColor: $r('app.color.background'),
+        titleBackgroundColor: immersiveSurfaceColor($r('app.color.background')),
         padding: {
           // 为什么设置`15`，看Builder的参数中`padding`的介绍：ConfigAddBindSheetTitleBuilderParam
           left: 15,
@@ -74,7 +75,7 @@ export struct CreateNewConfig{
     .height('100%')
     .hideTitleBar(true)
     // .title({builder: , height: BIND_SHEET_TITLE_CONTAINER_HEIGHT + BIND_SHEET_DRAG_BAR_HEIGHT})
-    .backgroundColor($r('app.color.container_background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.container_background')))
     // .onBackPressed(() => {
     //   this.configAddPageInfos.pop(true)
     //   return true

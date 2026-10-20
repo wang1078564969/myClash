@@ -70,6 +70,19 @@ func handleConnection(conn net.Conn) {
 		res, _ := json.Marshal(rr)
 		conn.Write([]byte(string(res) + "EOF"))
 	})
+	if request.Method == StartClash {
+		// StartClash 后连接必须保持打开：TUN 存续期间所有出站 socket 的
+		// protect 消息都通过该连接异步下发到 JS 侧（protect → setFdMap →
+		// 唤醒 Go 侧等待 channel）。旧实现处理完立即 defer conn.Close()，
+		// protect 消息全部写往已关闭连接被静默丢弃，JS 从未执行过 protect。
+		// 此处阻塞等待 JS 侧关闭（stopVpn → clashSocket.close() → EOF）。
+		drain := make([]byte, 256)
+		for {
+			if _, err := conn.Read(drain); err != nil {
+				return
+			}
+		}
+	}
 }
 
 type RpcRequest struct {

@@ -15,6 +15,11 @@ import { HomeCardCellularDataBarHeight,
   HomeCardPadding } from '../../common/breakpoint/BreakPoint'
 import { icon_primary } from '../Common/Common'
 import { Xb_DataSwitch } from 'xb_components'
+import {
+  immersiveMenuMaterial,
+  immersiveSelectMaterial,
+  immersiveSurfaceColor
+} from '../../common/utils/ImmersiveMaterialUtil'
 
 
 @Component
@@ -255,6 +260,7 @@ struct totalCustomDialog {
       .selectedOptionFont({ size: FONT_SIZE_16, weight: 400 })
       .optionFont({ size: FONT_SIZE_16, weight: 400 })
       .backgroundColor(Color.Transparent)
+      .systemMaterial(immersiveSelectMaterial())
       .onSelect((index: number) => {
         this.index=index
         if (this.uiConfig.isVibrate) {
@@ -264,9 +270,10 @@ struct totalCustomDialog {
       })
       .selectedOptionBgColor(this.icon_emphasize)
       .selectedOptionFontColor($r('sys.color.font_on_primary'))
-      .optionBgColor($r('app.color.container_background'))
-      .menuBackgroundColor($r('app.color.container_background'))
+      .optionBgColor(immersiveSurfaceColor($r('app.color.container_background')))
+      .menuBackgroundColor(immersiveSurfaceColor($r('app.color.container_background')))
       .menuBackgroundBlurStyle(BlurStyle.NONE)
+      .menuSystemMaterial(immersiveMenuMaterial())
       .onClick(() => {
         if (this.uiConfig.isVibrate) {
           customVibrator.vibratorTriggerOfHapticClockTimer()
@@ -326,7 +333,7 @@ struct totalCustomDialog {
       .alignItems(VerticalAlign.Center)
       .justifyContent(FlexAlign.Center)
     }
-    .backgroundColor($r('app.color.container_background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.container_background')))
     .width('100%')
     .padding({
       top: 15,

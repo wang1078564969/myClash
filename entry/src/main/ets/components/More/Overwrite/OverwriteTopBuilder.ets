@@ -3,6 +3,12 @@ import { customAnimationUtil } from "../../../common/utils/Animation"
 import { TAB_CONTENT_TITLE_FONT_SIZE, TAB_CONTENT_TITLE_HEIGHT } from "../../../common/entity/Constants"
 import { PageMargin } from "../../../common/breakpoint/BreakPoint"
 import { icon_primary } from  '../../Common/Common'
+import lazy { HdsTabs } from '@kit.UIDesignKit'
+import { CircleShape } from '@kit.ArkUI'
+import {
+  hdsGlassBarStyle,
+  isHdsImmersiveMaterialAvailable
+} from '../../../common/utils/ImmersiveMaterialUtil'
 
 @Component
 struct OverwriteTop {
@@ -24,28 +30,78 @@ struct OverwriteTop {
 
   // page内顶部标题偏移量
   @Consume curYOffset: number
+  private hdsMaterialAvailable: boolean = false
+
+  aboutToAppear(): void {
+    this.hdsMaterialAvailable = isHdsImmersiveMaterialAvailable()
+  }
+
+  @Builder
+  MaterialBackButton() {
+    Button({ type: ButtonType.Circle, stateEffect: true }) {
+      SymbolGlyph($r('sys.symbol.chevron_left'))
+        .fontSize(28)
+        .fontColor([icon_primary])
+    }
+    .width(40)
+    .height(40)
+    .translate({ y: -4 })
+    .backgroundColor(Color.Transparent)
+    .clickEffect(customAnimationUtil.isClickEffect(this.uiConfig))
+    .onClick(() => {
+      this.back()
+    })
+  }
+
+  back() {
+    console.log(`点击返回，pageInfos：${this.pageInfos.size()}，morePageInfos：${this.morePageInfos.size()}`)
+    if (this.widthBp < 2) {
+      this.pageInfos.pop(true)
+    } else {
+      this.morePageInfos.pop(true)
+    }
+  }
 
   build() {
     Row() {
       //返回图标
-      Button({ type: ButtonType.Circle, stateEffect: true }) {
-        SymbolGlyph($r('sys.symbol.chevron_left'))
-          .fontSize(28)
-          .fontColor([icon_primary])
-      }
-      .transition(customAnimationUtil.isSlide(200, this.uiConfig))
-      .margin({left: PageMargin(this.widthBp, this.heightBp)})
-      .onClick(() => {
-        console.log(`点击返回，pageInfos：${this.pageInfos.size()}，morePageInfos：${this.morePageInfos.size()}`)
-        if (this.widthBp < 2) {
-          this.pageInfos.pop(true)
-        } else {
-          this.morePageInfos.pop(true)
+      if (this.hdsMaterialAvailable) {
+        HdsTabs({ barPosition: BarPosition.End }) {
+          TabContent() {
+          }
+          .backgroundColor(Color.Transparent)
+          .tabBar(this.MaterialBackButton)
         }
-      })
-      .width(40)
-      .height(40)
-      .backgroundColor($r('app.color.settings_container_background'))
+        .barMode(BarMode.Fixed)
+        .vertical(false)
+        .barOverlap(true)
+        .scrollable(false)
+        .barHeight(40)
+        .barBackgroundColor(Color.Transparent)
+        .barBackgroundBlurStyle(BlurStyle.NONE)
+        .barBackgroundStyle({ maskColor: Color.Transparent })
+        .backgroundColor(Color.Transparent)
+        .barFloatingStyle(hdsGlassBarStyle(40))
+        .width(40)
+        .height(40)
+        .clipShape(new CircleShape({ width: 40, height: 40 }))
+        .margin({left: PageMargin(this.widthBp, this.heightBp)})
+        .transition(customAnimationUtil.isSlide(200, this.uiConfig))
+      } else {
+        Button({ type: ButtonType.Circle, stateEffect: true }) {
+          SymbolGlyph($r('sys.symbol.chevron_left'))
+            .fontSize(28)
+            .fontColor([icon_primary])
+        }
+        .transition(customAnimationUtil.isSlide(200, this.uiConfig))
+        .margin({left: PageMargin(this.widthBp, this.heightBp)})
+        .onClick(() => {
+          this.back()
+        })
+        .width(40)
+        .height(40)
+        .backgroundColor($r('app.color.settings_container_background'))
+      }
       Column() {
         Text(this.title)
           .fontSize(this.curYOffset<0?TAB_CONTENT_TITLE_FONT_SIZE-this.curYOffset/100:TAB_CONTENT_TITLE_FONT_SIZE)

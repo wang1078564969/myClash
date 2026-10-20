@@ -23,7 +23,7 @@ import { removeItemsByIndex } from "../../common/utils/RemoveItemsUtils"
 import { customVibrator } from "../../common/utils/VibratorUtil"
 import { customSound } from "../../common/utils/SoundPoolUtil"
 import { getResourceString } from "../../common/utils/ResourceStringUtil"
-import { immersiveMenuMaterial } from "../../common/utils/ImmersiveMaterialUtil"
+import { immersiveMenuMaterial, immersiveSurfaceColor } from "../../common/utils/ImmersiveMaterialUtil"
 import { extractUpdateInfo, getUpdateInfo, UpdateInfo } from "../../common/utils/CheckUpdateUtil"
 import { PageMargin } from "../../common/breakpoint/BreakPoint"
 import { icon_primary } from '../Common/Common'
@@ -420,7 +420,7 @@ struct About {
       .padding({ left: PageMargin(this.widthBp, this.heightBp), right: PageMargin(this.widthBp, this.heightBp) })
     }
     .width('100%')
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
     .hideTitleBar(true)
     .onBackPressed(() => {
       this.SettingsPageInfos.clear()
@@ -454,7 +454,7 @@ export struct AboutXBStudio {
         ItemBackgroundColor: $r('app.color.container_background')
       })
     }
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
     .hideTitleBar(true)
     .onBackPressed(() => {
       this.SettingsPageInfos.pop(true)
@@ -568,7 +568,7 @@ export struct AboutCollaborators {
       .contentEndOffset(CONTENT_END_OFFSET_150 - 85)
       .padding({ left: PageMargin(this.widthBp, this.heightBp), right: PageMargin(this.widthBp, this.heightBp) })
     }.width('100%')
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
     .hideTitleBar(true)
     .onBackPressed(() => {
       this.SettingsPageInfos.pop(true)
@@ -634,7 +634,7 @@ export struct ThirdServices {
       .contentEndOffset(CONTENT_END_OFFSET_150 - 65)
       .padding({ left: PageMargin(this.widthBp, this.heightBp), right: PageMargin(this.widthBp, this.heightBp) })
     }.width('100%')
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
     .hideTitleBar(true)
     .onBackPressed(() => {
       this.SettingsPageInfos.pop(true)
@@ -701,7 +701,7 @@ export struct UseGuidance {
       .contentEndOffset(CONTENT_END_OFFSET_150 - 65)
       .padding({ left: PageMargin(this.widthBp, this.heightBp), right: PageMargin(this.widthBp, this.heightBp) })
     }.width('100%')
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
     .hideTitleBar(true)
     .onBackPressed(() => {
       this.SettingsPageInfos.pop(true)
@@ -845,7 +845,7 @@ export struct FAQ {
       .alignListItem(ListItemAlign.Center)
       .padding({ left: PageMargin(this.widthBp, this.heightBp), right: PageMargin(this.widthBp, this.heightBp) })
     }.width('100%')
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
     .hideTitleBar(true)
     .onBackPressed(() => {
       this.SettingsPageInfos.pop(true)
@@ -997,7 +997,7 @@ export struct CheckUpdate {
       .padding({ left: PageMargin(this.widthBp, this.heightBp), right: PageMargin(this.widthBp, this.heightBp) })
     }
     .width('100%')
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
     .hideTitleBar(true)
     .onBackPressed(() => {
       this.SettingsPageInfos.pop(true)

@@ -16,6 +16,7 @@ import { UIConfig } from "../../entryability/AppState"
 import { customAnimationUtil } from "../../common/utils/Animation"
 import { PageMargin } from "../../common/breakpoint/BreakPoint"
 import { EventHub, EventKey } from "../../common/EventHub"
+import { immersiveSurfaceColor } from "../../common/utils/ImmersiveMaterialUtil"
 
 const TAG: string = '[通知页]';
 const DOMAIN_NUMBER: number = 0xFF00;
@@ -454,7 +455,7 @@ struct Notice {
       .padding({ left: PageMargin(this.widthBp, this.heightBp), right: PageMargin(this.widthBp, this.heightBp) })
     }
     .hideTitleBar(true)
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
     .onBackPressed(() => {
       this.SettingsPageInfos.clear();
       return true;

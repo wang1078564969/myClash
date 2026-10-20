@@ -11,6 +11,7 @@ import { customAnimationUtil } from "../../common/utils/Animation"
 import { getResourceString } from "../../common/utils/ResourceStringUtil"
 import { common } from "@kit.AbilityKit"
 import { PageMargin } from "../../common/breakpoint/BreakPoint"
+import { immersiveSurfaceColor } from "../../common/utils/ImmersiveMaterialUtil"
 
 interface KernelListItem {
   icons: Resource
@@ -175,7 +176,7 @@ struct Kernel {
     .width('100%')
     .height('100%')
     .hideTitleBar(true)
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
     .onBackPressed(() => {
       this.SettingsPageInfos.clear();
       return true;

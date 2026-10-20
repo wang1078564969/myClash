@@ -17,7 +17,7 @@ import { curves, PromptAction } from '@kit.ArkUI'
 import { ProviderPage } from '../components/Proxy/Provider'
 import { indexController } from './Index'
 import { customAnimationUtil } from '../common/utils/Animation'
-import { ButtonBuilder, icon_tertiary, Nothing, RightDownButton } from '../components/Common/Common'
+import { ButtonBuilder, Nothing, RightDownButton } from '../components/Common/Common'
 import { StylesEdit } from '../components/Proxy/StylesEdit'
 import { PopTips, PopupBuilder } from '../components/Start/Popup'
 import { deviceInfo } from '@kit.BasicServicesKit'
@@ -26,6 +26,7 @@ import { TabBarVertical, TabContentTitleMargin } from '../common/breakpoint/Brea
 import { TopBar } from '../components/Common/TopBar'
 import { getResourceString } from '../common/utils/ResourceStringUtil'
 import { RoundButton } from '../components/Common/RoundButton'
+import { FloatCircleButton } from '../components/Common/FloatCircleButton'
 import { cardManager } from '../common/utils/CardManageUtil'
 import { Xb_TabBarVertical, Xb_ToastUtil } from 'xb_components'
 import {
@@ -301,10 +302,11 @@ struct ProxyPage {
             })
             .onScrollFrameBegin((offset: number) => {
               this.curOffsetRemain += offset
-              if (offset > 0) {
+              // 滚动期间（含下拉）一律保持收起，避免展开的宽栏压住滚动内容
+              if (offset !== 0) {
                 this.isRolling = true
-              } else if (offset < 0) {
-                this.isRolling = false
+              }
+              if (offset < 0) {
                 this.curOffsetRemain = 0
               }
               // console.info("offsetRemain:" + offset + '/' + this.curOffsetRemain);
@@ -376,29 +378,22 @@ struct ProxyPage {
   delayButton() {
     Column() {
       if (this.uiConfig.tabStyle == 'float') {
-        Row() {
-          SymbolGlyph($r('sys.symbol.bolt_filled_on_circle'))
-            .fontSize(27).fontColor([icon_tertiary])
-        }
-        .backdropBlur(this.uiConfig.isBlurr ? 30 : 0)
-        .backgroundColor(this.uiConfig.isBlurr ? $r('app.color.float_tab_background_blur') : $r('app.color.background'))
-        .borderRadius(30)
-        .size({width: 50, height: 50})
-        .justifyContent(FlexAlign.Center)
-        .alignItems(VerticalAlign.Center)
-        .shadow({
-          radius: 15,
-          offsetY: 4,
-          color: $r('app.color.shadow_button'),
-          type: ShadowType.COLOR
+        FloatCircleButton({
+          icon: $r('sys.symbol.bolt_filled_on_circle'),
+          buttonSize: 50,
+          onTap: () => {
+            EventHub.sendEvent(EventKey.TestAllDelay)
+          }
         })
-        .transition(customAnimationUtil.getFloatButtonTransition(this.uiConfig, this.uiConfig.buttonPositionIndex))
       }
       else if (this.uiConfig.buttonPositionIndex === 1 || !this.uiConfig.needProxyStart) {
         RoundButton({
           needMargin: false,
           Icon2: $r('sys.symbol.bolt_filled_on_circle'),
         })
+          .onClick(() => {
+            EventHub.sendEvent(EventKey.TestAllDelay)
+          })
       }
       else {
         ButtonBuilder({
@@ -406,6 +401,9 @@ struct ProxyPage {
           icon: $r('sys.symbol.bolt_filled_on_circle')
         })
           .offset({y: 3})
+          .onClick(() => {
+            EventHub.sendEvent(EventKey.TestAllDelay)
+          })
       }
     }
     .bindPopup(!!this.isShowDelayPop, {
@@ -415,9 +413,6 @@ struct ProxyPage {
       systemMaterial: immersivePopupMaterial(),
       onWillDismiss: false,
       autoCancel: false
-    })
-    .onClick(async () => {
-      EventHub.sendEvent(EventKey.TestAllDelay)
     })
   }
   // 开始按钮

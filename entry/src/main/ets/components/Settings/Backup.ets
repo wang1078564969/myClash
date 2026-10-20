@@ -134,7 +134,7 @@ struct Backup {
 
     }
     .hideTitleBar(true)
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
     .onBackPressed(() => {
       this.SettingsPageInfos.clear();
       return true;
@@ -531,7 +531,7 @@ export struct CloudBackup {
     }
     .width('100%')
     .hideTitleBar(true)
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
     .onBackPressed(() => {
       this.SettingsPageInfos.pop(true)
       return true

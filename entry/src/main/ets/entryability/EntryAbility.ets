@@ -68,6 +68,7 @@ export default class EntryAbility extends UIAbility {
   };
   private proxyStartedTimer = new Timer()
   private avoidManager: Xb_AvoidanceManager | undefined = undefined;
+  private mainWindow: window.Window | undefined = undefined;
   private avoidListener: (avoidance: SmartAvoidance) => void = (newAvoidance) => {
     AppStorage.setOrCreate('bottomRectHeight', newAvoidance.bottom);
     Xb_Global.BottomRectHeight = newAvoidance.bottom
@@ -169,6 +170,7 @@ export default class EntryAbility extends UIAbility {
 
   // 实时监听系统系统配置更新状态
   onConfigurationUpdate(Config: Configuration): void {
+    this.updateSystemBarContentColor(Config.colorMode)
   }
 
   // 热启动
@@ -321,9 +323,24 @@ export default class EntryAbility extends UIAbility {
     AppStorage.setOrCreate('EnableUIMaterial', supported)
   }
 
+  /** 状态栏/导航条图标颜色跟随应用深浅模式，深色背景上保持白色图标 */
+  private updateSystemBarContentColor(colorMode: ConfigurationConstant.ColorMode | undefined): void {
+    if (this.mainWindow === undefined) {
+      return
+    }
+    const contentColor = colorMode === ConfigurationConstant.ColorMode.COLOR_MODE_DARK ? '#FFFFFF' : '#000000'
+    this.mainWindow.setWindowSystemBarProperties({
+      statusBarContentColor: contentColor,
+      navigationBarContentColor: contentColor
+    }).catch((error: BusinessError) => {
+      console.error(`Failed to set system bar content color. Cause: ${JSON.stringify(error)}`)
+    })
+  }
+
   onWindowStageWillDestroy(windowStage: window.WindowStage): void {
     // Main window will destroy, release UI related resources
     // 销毁避让管理器并移除监听
+    this.mainWindow = undefined
     if (this.avoidManager) {
       this.avoidManager.offChangeListener(this.avoidListener);
       this.avoidManager.destroy();
@@ -642,15 +659,24 @@ export default class EntryAbility extends UIAbility {
   private async intRectWindow(windowStage: window.WindowStage) {
     // 获取应用主窗口
     let windowClass: window.Window = windowStage.getMainWindowSync();
-    // 注意：不可调用 setWindowLayoutFullScreen(true)，全屏布局会禁用沉浸光感材质渲染
-    // （菜单/弹窗/吐司无玻璃效果）。当前采用默认非全屏布局：
-    // 布局避让由系统安全区处理，Index.ets 背景层 expandSafeArea 延伸绘制系统栏区域，
-    // Xb_AvoidanceManager 检测非全屏时归零手动避让值。
-    // windowClass.setWindowLayoutFullScreen(true).then(() => {
-    //   console.info('Succeeded in setting the window layout to full-screen mode.');
-    // }).catch((err: BusinessError) => {
-    //   console.error('Failed to set the window layout to full-screen mode. Cause:' + JSON.stringify(err));
-    // });
+    this.mainWindow = windowClass
+    // 系统状态栏/导航条沉浸：窗口内容延伸到系统栏区域，由 Xb_AvoidanceManager 计算避让值
+    try {
+      await windowClass.setWindowLayoutFullScreen(true)
+      console.info('Succeeded in setting the window layout to full-screen mode.')
+    } catch (error) {
+      console.error('Failed to set the window layout to full-screen mode. Cause:' + JSON.stringify(error))
+    }
+    try {
+      await windowClass.setWindowSystemBarProperties({
+        statusBarColor: '#00000000',
+        navigationBarColor: '#00000000'
+      })
+      console.info('Succeeded in setting transparent system bar colors.')
+    } catch (error) {
+      console.error('Failed to set system bar properties. Cause:' + JSON.stringify(error))
+    }
+    this.updateSystemBarContentColor(this.context.config.colorMode)
 
     // 缓存window窗口对象
     AppStorage.setOrCreate('WindowClass', windowClass)

@@ -168,10 +168,11 @@ struct ProxyGroupItem {
     }.cachedCount(4)
     .onScrollFrameBegin((offset: number) => {
       this.curOffsetRemain += offset
-      if (offset > 0) {
+      // 滚动期间（含下拉）一律保持收起，避免展开的宽栏压住滚动内容
+      if (offset !== 0) {
         this.isRolling = true
-      } else if(offset < 0) {
-        this.isRolling = false
+      }
+      if (offset < 0) {
         this.curOffsetRemain = 0
       }
       // console.info("offsetRemain:" + offset + '/' +this.curOffsetRemain);

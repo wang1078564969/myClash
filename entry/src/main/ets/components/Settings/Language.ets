@@ -6,6 +6,7 @@ import { ChangeLanguage } from "../../common/utils/ChangeLanguageUtil"
 import { UIConfig } from "../../entryability/AppState"
 import { customAnimationUtil } from "../../common/utils/Animation"
 import { PageMargin } from "../../common/breakpoint/BreakPoint"
+import { immersiveSurfaceColor } from "../../common/utils/ImmersiveMaterialUtil"
 
 @Component
 struct Language {
@@ -165,7 +166,7 @@ struct Language {
 
     }
     .hideTitleBar(true)
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
     .onBackPressed(() => {
       this.SettingsPageInfos.clear();
       return true;

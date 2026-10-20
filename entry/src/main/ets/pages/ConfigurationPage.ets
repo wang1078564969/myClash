@@ -19,7 +19,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit'
 import { Callback } from '@ohos.base'
 import { ConfigData } from '../common/entity/PageArgumentEntity'
 import {
-  CellularData, CustomConfirmDialog, icon_tertiary, Nothing } from '../components/Common/Common'
+  CellularData, CustomConfirmDialog, Nothing } from '../components/Common/Common'
 import { customVibrator } from "../common/utils/VibratorUtil"
 import ClashViewModel from '../entryability/ClashViewModel'
 import { AppConfig, UIConfig } from '../entryability/AppState'
@@ -34,6 +34,7 @@ import { ImportConfigFromFile } from '../components/Configuration/ImportConfigFr
 import { TopBar } from '../components/Common/TopBar'
 import { ListGutter, ListLanes, NavigationListPadding, TabContentTitleMargin } from '../common/breakpoint/BreakPoint'
 import { RoundButton } from '../components/Common/RoundButton'
+import { FloatCircleButton } from '../components/Common/FloatCircleButton'
 import { harmonyShare } from '@kit.ShareKit'
 import { uniformTypeDescriptor as utd } from '@kit.ArkData'
 import { common, Context } from '@kit.AbilityKit'
@@ -301,10 +302,11 @@ struct ConfigurationPage {
               .height('100%')
               .onScrollFrameBegin((offset: number) => {
                 this.curOffsetRemain += offset
-                if (offset > 0) {
+                // 滚动期间（含下拉）一律保持收起，避免展开的宽栏压住滚动内容
+                if (offset !== 0) {
                   this.isRolling = true
-                } else if(offset < 0) {
-                  this.isRolling = false
+                }
+                if (offset < 0) {
                   this.curOffsetRemain = 0
                 }
                 // console.info("offsetRemain:" + offset + '/' +this.curOffsetRemain);
@@ -499,33 +501,20 @@ struct ConfigurationPage {
 
   @Builder
   FloatAddButton() {
-    Row() {
-      SymbolGlyph($r('sys.symbol.plus'))
-        .fontSize(27).fontColor([icon_tertiary])
-    }
-    .backdropBlur(this.uiConfig.isBlurr ? 30 : 0)
-    .backgroundColor(this.uiConfig.isBlurr ? $r('app.color.float_tab_background_blur') : $r('app.color.background'))
-    .borderRadius(30)
-    .margin({ bottom: 20})
-    .size({width: 50, height: 50})
-    .justifyContent(FlexAlign.Center)
-    .alignItems(VerticalAlign.Center)
-    .shadow({
-      radius: 15,
-      offsetY: 4,
-      color: $r('app.color.shadow_button'),
-      type: ShadowType.COLOR
+    FloatCircleButton({
+      icon: $r('sys.symbol.plus'),
+      buttonSize: 50,
+      onTap: () => {
+        // 新配置
+        EventHub.sendEvent(EventKey.AddConfig)
+      }
     })
-    .margin({
-      bottom: Xb_TabBarVertical(this.widthBp, this.heightBp) || this.uiConfig.tabStyle == 'custom' ? 15 : this.bottomRectHeight == 0 ? 85 : this.bottomRectHeight + 63.5,
-      right: 15,
-      left: 15,
-    })
-    .onClick(() => {
-      // 新配置
-      EventHub.sendEvent(EventKey.AddConfig)
-    })
-    .transition(customAnimationUtil.getFloatButtonTransition(this.uiConfig, this.uiConfig.buttonPositionIndex))
+      .margin({
+        bottom: Xb_TabBarVertical(this.widthBp, this.heightBp) || this.uiConfig.tabStyle == 'custom' ? 15 : this.bottomRectHeight == 0 ? 85 : this.bottomRectHeight + 63.5,
+        right: 15,
+        left: 15,
+      })
+      .transition(customAnimationUtil.getFloatButtonTransition(this.uiConfig, this.uiConfig.buttonPositionIndex))
   }
 
   /**

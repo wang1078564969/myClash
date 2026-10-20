@@ -361,6 +361,8 @@ struct Index {
         .hideTitleBar(true).hideToolBar(true)
         .height('100%').width('100%')
         .mode(NavigationMode.Stack)
+        // 全屏布局下由内容层统一避让，Navigation 自身不再二次避让系统栏
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
       } else {
         // PX外屏样式
         PXSecScreen()
@@ -483,6 +485,8 @@ struct Index {
       },
       barSideMargin: 0,
       barBottomMargin: 0,
+      // 关闭悬浮栏默认的矩形渐变蒙层，只保留胶囊材质
+      maskColor: Color.Transparent,
       systemMaterial: material
     }
   }

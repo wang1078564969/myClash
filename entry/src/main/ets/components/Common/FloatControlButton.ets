@@ -56,7 +56,7 @@ export struct FloatControlButton {
       .barHeight(60)
       .barBackgroundColor(Color.Transparent)
       .barBackgroundBlurStyle(BlurStyle.NONE)
-      .barBackgroundStyle({ maskColor: Color.Transparent })
+      .barBackgroundStyle({ maskColor: '#00000000' })
       .backgroundColor(Color.Transparent)
       .barFloatingStyle(this.getHdsGlassStyle())
       .height(60)
@@ -65,7 +65,7 @@ export struct FloatControlButton {
       // 滑入/滑出 动画
       .transition(customAnimationUtil.getFloatButtonTransition(this.uiConfig, this.uiConfig.buttonPositionIndex))
     } else if (this.useGlassButton()) {
-      // 需要材质时才放进 TabBar；否则 Tabs 的默认栏背景会在圆形按钮外留下方形底色
+      // 沉浸材质仅在 Tabs 底部页签栏作用域内生效，圆钮需要 Tabs 作载体
       Tabs({ barPosition: BarPosition.End }) {
         TabContent() {
         }
@@ -76,9 +76,11 @@ export struct FloatControlButton {
       .scrollable(false)
       .barBackgroundColor(Color.Transparent)
       .barBackgroundBlurStyle(BlurStyle.NONE)
+      .backgroundColor(Color.Transparent)
       .barHeight(60)
       .height(60)
       .width(60)
+      .clipShape(new CircleShape({ width: 60, height: 60 }))
       // 滑入/滑出 动画
       .transition(customAnimationUtil.getFloatButtonTransition(this.uiConfig, this.uiConfig.buttonPositionIndex))
     } else {

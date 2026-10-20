@@ -3,6 +3,7 @@ import { customAnimationUtil } from "../../common/utils/Animation"
 import { BackButton } from "../Common/Common"
 import { CommonPage } from "../Start/CommonPage"
 import { TopTitleText } from "../Start/WelcomePage"
+import { immersiveSurfaceColor } from "../../common/utils/ImmersiveMaterialUtil"
 
 /*设置入口*/
 // 用户协议
@@ -21,7 +22,7 @@ export struct UserAgreement {
           TopTitleText($r('app.string.user_agreement'))
         }.zIndex(1)
         .width('100%')
-        .backgroundColor($r('app.color.background'))
+        .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
         Row() {
           BackButton(!this.windowMode)
         }.zIndex(2)
@@ -39,7 +40,7 @@ export struct UserAgreement {
     .width('100%')
     .height('100%')
     .hideTitleBar(true)
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
   }
 }
 
@@ -59,7 +60,7 @@ export struct PrivacyPolicy {
           TopTitleText($r('app.string.privacy_policy'))
         }.zIndex(1)
         .width('100%')
-        .backgroundColor($r('app.color.background'))
+        .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
         Column() {
           BackButton(!this.windowMode)
         }.zIndex(1)
@@ -77,6 +78,6 @@ export struct PrivacyPolicy {
     .width('100%')
     .height('100%')
     .hideTitleBar(true)
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
   }
 }

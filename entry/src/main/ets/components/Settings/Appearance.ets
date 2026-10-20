@@ -18,6 +18,7 @@ import { TabStyle, Xb_ColorModeManager, Xb_ToastUtil, Xb_UIConfig } from "xb_com
 import { Xb_ChangeThemeColor } from "xb_components/src/main/ets/utils/ChangeThemeColorUtil"
 import { holdingHandleUtil } from "../../common/utils/HoldingHandleUtil"
 import { hilog } from "@kit.PerformanceAnalysisKit"
+import { immersiveSurfaceColor } from "../../common/utils/ImmersiveMaterialUtil"
 
 
 @Component
@@ -360,7 +361,7 @@ struct Appearance {
 
     }
     .width('100%')
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
     .hideTitleBar(true)
     .onBackPressed(() => {
       this.SettingsPageInfos.clear();

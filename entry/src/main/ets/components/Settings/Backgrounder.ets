@@ -8,6 +8,7 @@ import { notificationManager } from "@kit.NotificationKit"
 import { common } from "@kit.AbilityKit"
 import { PageMargin } from "../../common/breakpoint/BreakPoint"
 import { deviceInfo } from '@kit.BasicServicesKit';
+import { immersiveSurfaceColor } from "../../common/utils/ImmersiveMaterialUtil"
 
 @Component
 struct Backgrounder {
@@ -159,7 +160,7 @@ struct Backgrounder {
       .padding({ left: PageMargin(this.widthBp, this.heightBp), right: PageMargin(this.widthBp, this.heightBp) })
     }
     .hideTitleBar(true)
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
     .onBackPressed(() => {
       this.SettingsPageInfos.clear();
       return true;

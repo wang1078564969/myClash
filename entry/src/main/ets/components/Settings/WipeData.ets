@@ -1,4 +1,5 @@
 import TopBuilder from "./TopBuilder"
+import { immersiveSurfaceColor } from "../../common/utils/ImmersiveMaterialUtil"
 
 @Component
 struct WipeData {
@@ -15,7 +16,7 @@ struct WipeData {
       })
     }
     .hideTitleBar(true)
-    .backgroundColor($r('app.color.background'))
+    .backgroundColor(immersiveSurfaceColor($r('app.color.background')))
   //  .backgroundBlurStyle(BlurStyle.BACKGROUND_REGULAR)
     .onBackPressed(() => {
       this.SettingsPageInfos.clear();

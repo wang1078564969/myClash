@@ -53,13 +53,14 @@ export function hdsGlassBarStyle(barWidth: number): HdsTabsFloatingStyle | undef
     barWidth: { smallWidth: barWidth, mediumWidth: barWidth, largeWidth: barWidth },
     barSideMargin: 0,
     barBottomMargin: 0,
-    gradientMask: { maskColor: Color.Transparent },
+    gradientMask: { maskColor: '#00000000' },
     systemMaterialEffect: effect
   }
 }
 
 function createImmersiveMaterial(style: uiMaterial.ImmersiveStyle, interactive: boolean = false,
-  colorInvert: boolean = false, lightEffect: boolean = false): uiMaterial.ImmersiveMaterial | undefined {
+  colorInvert: boolean = false, lightEffect: boolean = false,
+  applyShadow: boolean = true): uiMaterial.ImmersiveMaterial | undefined {
   if (!isImmersiveMaterialEnabled()) {
     return undefined
   }
@@ -67,6 +68,7 @@ function createImmersiveMaterial(style: uiMaterial.ImmersiveStyle, interactive: 
     style: style,
     interactive: interactive,
     colorInvert: colorInvert,
+    applyShadow: applyShadow,
     lightEffect: lightEffect ? { color: Color.White } : undefined
   })
 }
@@ -76,9 +78,9 @@ export function immersiveButtonMaterial(): uiMaterial.ImmersiveMaterial | undefi
   return createImmersiveMaterial(uiMaterial.ImmersiveStyle.THIN, true, true, false)
 }
 
-/** 底部页签栏：光感反馈，但整条栏不做形变 */
+/** 底部页签栏：光感反馈，但整条栏不做形变；阴影由悬浮样式承担，避免矩形底色 */
 export function immersiveTabBarMaterial(): uiMaterial.ImmersiveMaterial | undefined {
-  return createImmersiveMaterial(uiMaterial.ImmersiveStyle.THIN, false, false, true)
+  return createImmersiveMaterial(uiMaterial.ImmersiveStyle.THIN, false, false, true, false)
 }
 
 /** 搜索框：超薄材质，保持输入区域通透 */

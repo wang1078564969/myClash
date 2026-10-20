@@ -89,15 +89,26 @@ struct MorePage {
 
 
   build() {
-    Navigation(this.morePageInfos) {
-      // md及以上宽度
-      this.MoreContent()
+    // 手机宽度下内层 Navigation 不承载任何路由（跳转走外层 pageInfos），
+    // 而 Navigation 的 NavBar 内容区会避让底部系统栏使列表矮一截；
+    // 直接裸承载与代理/配置页一致，列表可铺满全屏
+    if (this.widthBp < 2) {
+      Stack() {
+        this.MoreContent()
+      }
+      .height('100%')
+      .width('100%')
+    } else {
+      Navigation(this.morePageInfos) {
+        // md及以上宽度
+        this.MoreContent()
+      }
+      .mode(MoreNavMode(this.widthBp, this.heightBp))
+      .hideToolBar(true)
+      .navBarWidth(330)
+      .width('100%')
+      .height('100%')
     }
-    .mode(MoreNavMode(this.widthBp, this.heightBp))
-    .hideToolBar(true)
-    .navBarWidth(330)
-    .width('100%')
-    .height('100%')
   }
 
   @Builder
@@ -176,6 +187,9 @@ struct MorePage {
             }*/
 
         }
+        // 偏移量封闭在 List 内部消化（SELF_ONLY）：一旦上抛给外层，
+        // 会被本页 Navigation 的 NavBar 回弹形变接住，NavBar 区域收缩、
+        // 底部露出不透明背景色块遮住列表
         .width('100%')
         .height('100%')
         .edgeEffect(EdgeEffect.Spring)
@@ -184,34 +198,35 @@ struct MorePage {
         .contentEndOffset(this.isLandscapePhone ? 10 : CONTENT_END_OFFSET_150)
         .chainAnimation(true)
         .nestedScroll({
-          scrollForward: NestedScrollMode.PARENT_FIRST,
-          scrollBackward: NestedScrollMode.SELF_FIRST
+          scrollForward: NestedScrollMode.SELF_ONLY,
+          scrollBackward: NestedScrollMode.SELF_ONLY
         })
         .onScrollStart(() => {
           hilog.info(0xFF00, "MorePagetestTag", "#onScrollStart 是否二级页面: %{public}s", this.isSecondary)
         })
+        .onScrollFrameBegin((offset: number) => {
+          this.curOffsetRemain  += offset
+          // 滚动期间（含下拉）一律保持收起，避免展开的宽栏压住滚动内容
+          if (offset !== 0) {
+            this.isRolling = true
+          }
+          if (offset < 0) {
+            this.curOffsetRemain = 0
+          }
+          // console.info("offsetRemain:" + offset + '/' +this.curOffsetRemain);
+          return { offsetRemain: offset }
+        })
+        .onDidScroll((scrollOffset: number, scrollState: ScrollState): void => {
+          // 累计计算当前滚动在Y轴方向的偏移量
+          if (this.uiConfig.isAnimation){
+            this.curYOffsetMore += scrollOffset
+          }
+          // console.debug("yOffset" + this.curYOffsetMore);
+        })
       }
       .padding({top: (this.isRolling && this.isSmallSquareScreen) ? this.heightTop : TAB_CONTENT_TITLE_HEIGHT})
       .height('100%')
-      .edgeEffect(this.uiConfig.isAnimation ? EdgeEffect.Spring: null)
-      .onScrollFrameBegin((offset: number) => {
-        this.curOffsetRemain  += offset
-        if (offset > 0) {
-          this.isRolling = true
-        } else if (offset < 0){
-          this.isRolling = false
-          this.curOffsetRemain = 0
-        }
-        // console.info("offsetRemain:" + offset + '/' +this.curOffsetRemain);
-        return { offsetRemain: offset }
-      })
-      .onDidScroll((xOffset: number, yOffset: number, scrollState: ScrollState): void => {
-        // 累计计算当前父组件滚动在Y轴方向的偏移量
-        if (this.uiConfig.isAnimation){
-          this.curYOffsetMore += yOffset
-        }
-        // console.debug("yOffset" + this.curYOffsetMore);
-      })
+      .edgeEffect(EdgeEffect.None)
     }.height('100%').width('100%')
   }
 

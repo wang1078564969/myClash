@@ -1,6 +1,7 @@
 import { AbilityConstant, ConfigurationConstant, UIAbility, Want, Configuration, common } from '@kit.AbilityKit';
 import { hiAppEvent, hilog } from '@kit.PerformanceAnalysisKit';
 import { uiMaterial, window } from '@kit.ArkUI';
+import { connection } from '@kit.NetworkKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import ClashViewModel from './ClashViewModel';
 import { AppConfig, AppState, ClashCore } from './AppState';
@@ -30,6 +31,8 @@ import { StatusBarConfig, StatusBarIconResource,
   Xb_PreferenceUtil} from 'xb_components';
 import BackupRestoreUtil from '../common/utils/BackupRestoreUtil';
 import ConfigAutoUpdateService from '../common/utils/ConfigAutoUpdateService';
+import KeepAliveManager, { KeepAliveTaskMode } from '../common/utils/KeepAliveManager';
+import KeepAliveDiagnostics from '../common/utils/KeepAliveDiagnostics';
 import BuildProfile from 'BuildProfile';
 import { accessControlRdb } from '../common/datasources/AccessControlRdb';
 
@@ -55,6 +58,11 @@ export default class EntryAbility extends UIAbility {
   private coreNextRecoveryAt: number = 0
   /** 本次掉线是否已经记录/提示过 */
   private coreDropRecorded: boolean = false
+  /** 防止自动恢复 VPN 并发 */
+  private autoStartingVpn: boolean = false
+  /** 网络变化监听只注册一次 */
+  private networkListenerRegistered: boolean = false
+  private netConnection?: connection.NetConnection
   // 设备断点获取
   private uiContext?: UIContext;
   private debugVpn: SocketStubService | null = null
@@ -118,24 +126,37 @@ export default class EntryAbility extends UIAbility {
     }
     // 初始化访问控制数据库
     accessControlRdb.init(this.context)
-    // 添加崩溃监听
+    // 添加崩溃/被杀监听
     try {
+      const eventNames: string[] = [hiAppEvent.event.APP_CRASH, hiAppEvent.event.APP_FREEZE]
+      if (deviceInfo.sdkApiVersion >= 20) {
+        eventNames.push(hiAppEvent.event.APP_KILLED)
+      }
       hiAppEvent.addWatcher({
         name: "watcher",
-        // 订阅崩溃事件
+        // 订阅崩溃、冻屏、被杀事件
         appEventFilters: [
           {
             domain: hiAppEvent.domain.OS,
-            names: [hiAppEvent.event.APP_CRASH]
+            names: eventNames
           }
         ],
         onReceive: (domain: string, appEventGroups: Array<hiAppEvent.AppEventGroup>) => {
           AppStorage.setOrCreate('crash', true)
           AppStorage.setOrCreate('crashEvent', appEventGroups)
+          const appConfig = AppStorage.get<AppConfig>('appConfig')
+          const coreName = appConfig !== undefined ? ClashCore[appConfig.clashCore] : 'unknown'
+          const status = KeepAliveManager.getStatus()
+          for (const group of appEventGroups) {
+            for (const info of group.appEventInfos) {
+              KeepAliveDiagnostics.recordDrop(`系统事件 ${info.name}`, coreName,
+                KeepAliveTaskMode[status.taskMode])
+            }
+          }
         }
       })
     } catch (error) {
-      console.error(`崩溃事件监听注册失败，message：${error.message}`)
+      console.error(`崩溃/被杀事件监听注册失败，message：${error.message}`)
     }
     // 当前主题模式
     AppStorage.setOrCreate<ConfigurationConstant.ColorMode>('currentColorMode', this.context.config.colorMode)
@@ -373,7 +394,11 @@ export default class EntryAbility extends UIAbility {
     // Ability has brought to foreground
     AppStorage.setOrCreate('ForwardState', true)
     hilog.info(0x0000, 'EntryAbility', '%{public}s', 'Ability onForeground');
-
+    KeepAliveManager.init(this.context)
+    KeepAliveManager.apply(this.context, ClashViewModel.vpnStarted).catch((e: Error) => {
+      hilog.warn(0x0000, 'EntryAbility', `前台应用后台保活失败: ${e.message}`)
+    })
+    this.autoStartVpnIfNeeded()
     // 应用切回前台时，触发一次配置更新检查
     // this.checkConfigAutoUpdate();
   }
@@ -391,10 +416,60 @@ export default class EntryAbility extends UIAbility {
     }
   }
 
+  /** 上次 VPN 为开启状态时，冷启动/回前台自动恢复 */
+  private async autoStartVpnIfNeeded(): Promise<void> {
+    if (this.autoStartingVpn || !this.clashCoreInitialized) {
+      return
+    }
+    const appConfig = AppStorage.get<AppConfig>('appConfig')
+    if (appConfig?.vpnDesiredOn !== true || ClashViewModel.vpnStarted) {
+      return
+    }
+    this.autoStartingVpn = true
+    try {
+      const started = await ClashViewModel.StartVpn()
+      if (!started) {
+        hilog.warn(0x0000, 'EntryAbility', '自动恢复 VPN 失败，保留 desired 状态等待下次重试')
+      }
+    } catch (e) {
+      hilog.error(0x0000, 'EntryAbility', `自动恢复 VPN 异常: ${e.message}`)
+    } finally {
+      this.autoStartingVpn = false
+    }
+  }
+
+  /** 网络恢复后做一次轻量核心探测，失败交给看门狗恢复 */
+  private async probeCoreAfterNetworkChange(): Promise<void> {
+    if (!ClashViewModel.vpnStarted) {
+      return
+    }
+    try {
+      await ClashViewModel.getRuntime()
+    } catch (e) {
+      hilog.warn(0x0000, 'EntryAbility', `网络变化后核心探测失败: ${e.message}`)
+      ClashViewModel.socketProxy.active = false
+      this.coreUnhealthyTicks = CORE_UNHEALTHY_THRESHOLD
+      this.coreNextRecoveryAt = 0
+    }
+  }
+
+  onMemoryLevel(level: AbilityConstant.MemoryLevel): void {
+    if (level === AbilityConstant.MemoryLevel.MEMORY_LEVEL_LOW ||
+      level === AbilityConstant.MemoryLevel.MEMORY_LEVEL_CRITICAL) {
+      hilog.warn(0x0000, 'EntryAbility', `内存紧张 level=${level}，释放非关键缓存`)
+      ClashViewModel.proxyGroups = []
+      AppStorage.setOrCreate('crashEvent', [])
+    }
+  }
+
   onBackground(): void {
     // Ability has back to background
     AppStorage.setOrCreate('ForwardState', false)
     hilog.info(0x0000, 'EntryAbility', '%{public}s', 'Ability onBackground');
+    KeepAliveManager.init(this.context)
+    KeepAliveManager.apply(this.context, ClashViewModel.vpnStarted).catch((e: Error) => {
+      hilog.warn(0x0000, 'EntryAbility', `后台应用保活失败: ${e.message}`)
+    })
     this.saveConfigThePreferences();
     Xb_PreferenceUtil.save().then(() => {
       hilog.debug(0xC020, 'EntryAbility',
@@ -408,6 +483,17 @@ export default class EntryAbility extends UIAbility {
   onDestroy(): void {
     hilog.info(0x0000, 'EntryAbility', '%{public}s', 'Ability onDestroy');
     this.stopCoreWatchdog()
+    if (this.netConnection !== undefined) {
+      this.netConnection.unregister((err: BusinessError) => {
+        if (err) {
+          hilog.warn(0x0000, 'EntryAbility', `注销网络变化监听失败: ${err.message}`)
+        }
+      })
+      this.netConnection = undefined
+    }
+    KeepAliveManager.apply(this.context, false).catch((e: Error) => {
+      hilog.warn(0x0000, 'EntryAbility', `停止后台保活失败: ${e.message}`)
+    })
     this.saveConfigThePreferences()
     // 移除卡片监听事件
     this.unRegisterCardEvent()
@@ -547,6 +633,25 @@ export default class EntryAbility extends UIAbility {
     hilog.info(0x0000, 'EntryAbility', 'Succeeded in loading the content.');
 
     this.clashCoreInitialized = true
+    if (!this.networkListenerRegistered) {
+      try {
+        this.netConnection = connection.createNetConnection()
+        this.netConnection.on('netAvailable', () => {
+          setTimeout(() => {
+            this.probeCoreAfterNetworkChange()
+          }, 1000)
+        })
+        this.netConnection.register((err: BusinessError) => {
+          if (err) {
+            hilog.warn(0x0000, 'EntryAbility', `注册网络变化监听失败: ${err.message}`)
+          }
+        })
+        this.networkListenerRegistered = true
+      } catch (e) {
+        hilog.warn(0x0000, 'EntryAbility', `创建网络变化监听失败: ${e.message}`)
+      }
+    }
+    this.autoStartVpnIfNeeded()
 
     // 启动配置自动更新服务
     await this.startConfigAutoUpdateService();
@@ -605,6 +710,12 @@ export default class EntryAbility extends UIAbility {
     }
     if (!this.coreDropRecorded) {
       ClashViewModel.socketProxy.offlineTime.push(Date.now())
+      const appConfig = AppStorage.get<AppConfig>('appConfig')
+      const coreName = appConfig !== undefined ? ClashCore[appConfig.clashCore] : 'unknown'
+      const keepAliveStatus = KeepAliveManager.getStatus()
+      KeepAliveDiagnostics.recordDrop(
+        ClashViewModel.socketProxy.lastFailureReason !== '' ? ClashViewModel.socketProxy.lastFailureReason : '核心 socket 不可用',
+        coreName, KeepAliveTaskMode[keepAliveStatus.taskMode])
       this.coreDropRecorded = true
       Xb_ToastUtil.showToast({
         message: `核心恢复中(${ClashViewModel.socketProxy.offlineTime.length})...`
@@ -716,7 +827,11 @@ export default class EntryAbility extends UIAbility {
       console.log('卡片 - 启动/停止代理', proxyActionType)
 
       if (proxyActionType === ProxyActionType.START) {
-        await ClashViewModel.StartVpn()
+        const started = await ClashViewModel.StartVpn()
+        if (!started) {
+          cardManager.pushCartProxyMode(false, '代理启动失败')
+          return
+        }
         setTimeout(() => {
           this.refreshState(proxyNodeInfo?.p ?? '')
         }, 500)

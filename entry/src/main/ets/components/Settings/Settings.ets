@@ -28,6 +28,7 @@ import { PageMargin } from "../../common/breakpoint/BreakPoint"
 import { UpdateLog } from '../Start/UpdateLog';
 import { EventHub, EventKey } from '../../common/EventHub';
 import { Xb_ToastUtil } from 'xb_components';
+import KeepAliveDiagnostics, { DropRecord } from '../../common/utils/KeepAliveDiagnostics';
 
 
 @Entry
@@ -77,7 +78,7 @@ struct Settings {
         ListItem() {
           Text() {
             Span($r('app.string.settings_count_vpn'))
-            Span(`${ClashViewModel.socketProxy.offlineTime.length}`)
+            Span(`${KeepAliveDiagnostics.getCount()}`)
             Span(`${getResourceString($r('app.string.times'), this.context)}, `)
             Span($r('app.string.view_detail'))
               .fontColor(this.icon_emphasize)
@@ -291,7 +292,7 @@ export default Settings
 @Component
 struct OfflineDetail {
 
-  @State offline: number[] = []
+  @State offline: DropRecord[] = []
   @Consume('NavSettingsPathStack') SettingsPageInfos: NavPathStack
   // 宽度断点
   @StorageLink ('currentWidthBreakpoint') widthBp: WidthBreakpoint = 1
@@ -300,7 +301,7 @@ struct OfflineDetail {
 
 
   aboutToAppear(): void {
-    this.offline = ClashViewModel.socketProxy.offlineTime.reverse()
+    this.offline = KeepAliveDiagnostics.getRecords()
   }
 
   build() {
@@ -317,7 +318,7 @@ struct OfflineDetail {
         })
       } else {
         List({ space: 10 }) {
-          ForEach(this.offline, (item: number, index: number) => {
+          ForEach(this.offline, (item: DropRecord, index: number) => {
             ListItem() {
               Row() {
                 Column() {
@@ -331,10 +332,27 @@ struct OfflineDetail {
                   Text() {
                     Span($r('app.string.time'))
                     Span('：')
-                    Span(timestampToDateTime(item))
+                    Span(timestampToDateTime(item.time))
                   }
                   .fontWeight(FontWeight.Normal)
                   .fontSize(15)
+                  Text() {
+                    Span('原因：')
+                    Span(item.reason)
+                  }
+                  .fontWeight(FontWeight.Normal)
+                  .fontSize(14)
+                  .fontColor($r('sys.color.font_secondary'))
+                  .margin({ top: 4 })
+                  Text() {
+                    Span('内核：')
+                    Span(item.core)
+                    Span('  保活：')
+                    Span(item.keepAlive)
+                  }
+                  .fontWeight(FontWeight.Normal)
+                  .fontSize(14)
+                  .fontColor($r('sys.color.font_secondary'))
                 }
                 .alignItems(HorizontalAlign.Start)
               }

@@ -9,6 +9,7 @@ import { common } from "@kit.AbilityKit"
 import { PageMargin } from "../../common/breakpoint/BreakPoint"
 import { deviceInfo } from '@kit.BasicServicesKit';
 import { immersiveSurfaceColor } from "../../common/utils/ImmersiveMaterialUtil"
+import KeepAliveManager from "../../common/utils/KeepAliveManager"
 
 @Component
 struct Backgrounder {
@@ -32,6 +33,7 @@ struct Backgrounder {
   @State openContentText: ResourceStr = $r('app.string.simulate_down_open_content_text')
   @Consume('NavSettingsPathStack') SettingsPageInfos: NavPathStack
   @Consume('icon_emphasize') icon_emphasize: ResourceColor
+  @Consume proxyEnabled: boolean
   // 高度断点
   @StorageLink ('currentHeightBreakpoint') heightBp: HeightBreakpoint = 0
   // 宽度断点
@@ -66,6 +68,7 @@ struct Backgrounder {
             this.isKeepTask = !this.isKeepTask
             if (this.isKeepTask) {
               this.isLocate = false
+              this.isDown = false
             }
           })
         }
@@ -86,7 +89,7 @@ struct Backgrounder {
         }.onClick(() => {
           if(this.isLocate) {
             // 打开模拟定位关闭提示弹窗
-            if(!this.isDown && !this.isDown) {
+            if(!this.isDown) {
               this.closeDialogController.open()
             }
           } else {
@@ -282,6 +285,10 @@ struct Backgrounder {
     } else {
       this.uiConfig.Enablebackgrounder = false
     }
+    // 设置变更立即生效，不再等下次启动 VPN
+    KeepAliveManager.apply(this.context, this.proxyEnabled).catch((err: Error) => {
+      hilog.error(0xFF00, 'Backgrounder', `立即应用保活设置失败: ${err.message}`)
+    })
   }
 
   async noticePermission(id: 'down' | 'locate') {

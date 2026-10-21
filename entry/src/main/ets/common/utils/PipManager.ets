@@ -65,6 +65,9 @@ export class PipManager {
   private pipController?: PiPWindow.PiPController = undefined;
   private mXComponentController: XComponentController;
   private xComponent: typeNode.XComponent| null = null; // typeNode节点
+  private pipInitialized: boolean = false
+  private pipRunning: boolean = false
+  private stateListener?: (state: PiPWindow.PiPState, reason: string) => void
 
   public static getInstance(): PipManager {
     return PipManager.instance;
@@ -127,7 +130,22 @@ export class PipManager {
       default:
         break;
     }
+    this.pipRunning = state === PiPWindow.PiPState.STARTED
     console.info(`[${TAG}] onStateChange: ${curState}, reason: ${reason}`);
+    this.stateListener?.(state, reason)
+  }
+
+  /** 画中画是否可用（系统开关 + 已初始化） */
+  isAvailable(): boolean {
+    return this.pipInitialized && this.pipController !== undefined
+  }
+
+  isRunning(): boolean {
+    return this.pipRunning
+  }
+
+  setStateListener(listener: (state: PiPWindow.PiPState, reason: string) => void): void {
+    this.stateListener = listener
   }
 
   // 解注册监听
@@ -142,15 +160,17 @@ export class PipManager {
   }
 
   // 步骤1：创建画中画控制器，注册生命周期事件以及控制事件回调
-  init(ctx: Context) {
+  init(ctx: Context): boolean {
     if (this.pipController !== null && this.pipController != undefined) {
-      return;
+      return true;
     }
     console.info(TAG, 'onPageShow');
     if (!PiPWindow.isPiPEnabled()) {
       console.error(TAG, `picture in picture disabled for current OS`);
-      return;
+      this.pipInitialized = false
+      return false;
     }
+    this.pipInitialized = true
 
     let nodeController: PipBackgroundNodeController = new PipBackgroundNodeController()
 
@@ -166,6 +186,7 @@ export class PipManager {
     let promise: Promise<PiPWindow.PiPController> = PiPWindow.create(config, this.xComponent);
     promise.then((controller: PiPWindow.PiPController) => {
       this.pipController = controller;
+      this.pipInitialized = true
       // 通过画中画控制器实例的setAutoStartEnabled接口设置是否需要在应用返回桌面时自动启动画中画
       this.pipController.setAutoStartEnabled(true);
       // 通过画中画控制器实例的on('stateChange')接口注册生命周期事件回调
@@ -177,8 +198,10 @@ export class PipManager {
         this.onActionEvent(control);
       });
     }).catch((err: BusinessError) => {
+      this.pipInitialized = false
       console.error(TAG, `Failed to create pip controller. Cause:${err.code}, message:${err.message}`);
     });
+    return true
   }
 
   // 步骤2：创建画中画控制器实例后，通过startPiP接口启动画中画
@@ -210,8 +233,12 @@ export class PipManager {
     });
   }
 
-  setAutoStart(autoStart: boolean): void {
-    this.pipController?.setAutoStartEnabled(autoStart);
+  setAutoStart(autoStart: boolean): boolean {
+    if (this.pipController === undefined) {
+      return false
+    }
+    this.pipController.setAutoStartEnabled(autoStart);
+    return true
   }
 
   // 创建typeNode节点

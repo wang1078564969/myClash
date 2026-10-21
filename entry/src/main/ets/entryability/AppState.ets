@@ -56,6 +56,8 @@ export class AppConfig {
   accessControl: boolean = false
   testUrl: string = "https://www.gstatic.com/generate204"
   clashCore: ClashCore = ClashCore.ClashMeta
+  // 用户期望 VPN 保持开启；用于杀进程/冷启动后的恢复
+  vpnDesiredOn: boolean = false
   switchMode: ProxyMode = ProxyMode.Rule
   constructor() {
   }
@@ -132,6 +134,10 @@ export class UIConfig {
   backgroundDownModel: boolean = false
   // 模拟画中画启用变量
   backgroundPiPModel: boolean = false
+  // 掉线/保活诊断记录 JSON 数组，持久化到 PersistentStorage
+  dropRecords: string = '[]'
+  lastDropReason: string = ''
+  lastDropTime: number = 0
   /* 主页小卡片相关 */
   // 分流模式小卡片  平移属性参数
   translateY: number | string = '-100%'

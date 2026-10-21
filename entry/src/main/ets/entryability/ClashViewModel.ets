@@ -1,5 +1,5 @@
 import { ProfileRepo } from "proxy_core/src/main/ets/ProfileRepo";
-import { Context, Want } from "@kit.AbilityKit";
+import { Context, Want, common } from "@kit.AbilityKit";
 import { SocketProxyService, Profile, ProfileType, UpdateConfigParams, ClashConfig, getHome,
   LogInfo,
   Provider,
@@ -462,89 +462,128 @@ export class ClashViewModel {
     }
   }
   vpnStarted = false
+  private stopEntryListenerRegistered: boolean = false
 
   // 启动前要加载配置
   // loadConfig
-  async StartVpn(){
-    this.vpnStarted = true
-    await this.loadVpnOptions()
-    let result = await this.socketProxy.startClash()
-    // 核心崩溃 小钥匙一直在，要重启两量变
-    if (!result){
-      result = await this.socketProxy.startClash()
+  async StartVpn(): Promise<boolean> {
+    if (this.vpnStarted) {
+      return true
     }
-    if (result){
+    this.vpnStarted = true
+    try {
+      const optionsLoaded = await this.loadVpnOptions()
+      if (!optionsLoaded) {
+        console.error('ClashViewModel.StartVpn loadVpnOptions 失败')
+        this.vpnStarted = false
+        return false
+      }
+      let result = await this.socketProxy.startClash()
+      // 核心崩溃 小钥匙一直在，要重启两量变
+      if (!result){
+        result = await this.socketProxy.startClash()
+      }
+      if (!result) {
+        console.error('ClashViewModel.StartVpn startClash 失败')
+        this.vpnStarted = false
+        return false
+      }
       EventHub.sendEvent(EventKey.StartedClash)
       EventHub.sendEvent(EventKey.checkIpInfo)
+      const runTime = await this.getRuntime()
+      hilog.info(0x001, "EntryAbility", "StartVpn时间戳: " + runTime)
+      // 启动前先初始化卡片显示文本
+      cardManager.pushCartVpnServiceTime(PROXY_STARTED_DURATION_INIT_VALUE)
+      // 计算时间
+      const vpnServiceStartTime = Number(runTime)
+      this.proxyStartedTimer.start((time)=>{
+        EventHub.sendEvent(EventKey.ProxyDuration, time)
+        cardManager.pushCartVpnServiceTime(number2Time(time))
+      },vpnServiceStartTime)
+      if (!this.stopEntryListenerRegistered) {
+        EventHub.on(EventKey.StopedClashEntry,()=>{
+          hilog.info(0x001, "ClashViewModel", "StopedClashEntry事件")
+          this.proxyStartedTimer.reset()
+        })
+        this.stopEntryListenerRegistered = true
+      }
+      cardManager.pushCartProxyMode(this.vpnStarted)
+      const appConfig = AppStorage.get<AppConfig>('appConfig')
+      if (appConfig !== undefined) {
+        appConfig.vpnDesiredOn = true
+      }
+      return true
+    } catch (e) {
+      console.error(`ClashViewModel.StartVpn 失败: ${e.message}`)
+      this.vpnStarted = false
+      return false
     }
-    const runTime = await this.getRuntime()
-    hilog.info(0x001, "EntryAbility", "StartVpn时间戳: " + runTime)
-    // 启动前先初始化卡片显示文本
-    cardManager.pushCartVpnServiceTime(PROXY_STARTED_DURATION_INIT_VALUE)
-    // 计算时间
-    const vpnServiceStartTime = Number(runTime)
-    this.proxyStartedTimer.start((time)=>{
-      EventHub.sendEvent(EventKey.ProxyDuration, time)
-      cardManager.pushCartVpnServiceTime(number2Time(time))
-    },vpnServiceStartTime)
-
-    EventHub.on(EventKey.StopedClashEntry,()=>{
-      hilog.info(0x001, "ClashViewModel", "StopedClashEntry事件")
-      this.proxyStartedTimer.reset()
-    })
-
-    cardManager.pushCartProxyMode(this.vpnStarted)
   }
-  async loadVpnOptions(){
+  async loadVpnOptions(): Promise<boolean> {
     // 使用首选项持久化单个节点信息供卡片拉起服务
-    let appConfig = AppStorage.get<AppConfig>("appConfig") || cardManager.getAppConfig()
-    let clashConfig = AppStorage.get<ClashConfig>("clashConfig") || cardManager.getClashConfig()
-    if (appConfig == null)
-      return
-    if (appConfig!.accessControl) {
-      // 从数据库加载白名单
-      const whiteApps = await accessControlRdb.getAppsByDomain('WHITE', 'name');
-      // 提取出处于“选中”状态的包名
-      let acceptList = whiteApps.filter(a => a.isSelected).map(a => a.package_name);
-      // 补充强制放行的包名
-      const protectedPackages = [
-        this.context?.applicationInfo.name as string,
-        'com.atomicservice.5765880207855877209'
-      ];
-      // 去重并加入保护列表
-      protectedPackages.forEach(pkg => {
-        if (pkg && !acceptList.includes(pkg)) {
-          acceptList.push(pkg);
+    const appConfig = AppStorage.get<AppConfig>("appConfig") || cardManager.getAppConfig()
+    const clashConfig = AppStorage.get<ClashConfig>("clashConfig") || cardManager.getClashConfig()
+    if (appConfig == null) {
+      return false
+    }
+    let acceptList: string[] = []
+    let rejectList: string[] = []
+    if (appConfig.accessControl) {
+      try {
+        if (this.context !== undefined) {
+          await accessControlRdb.init(this.context as common.UIAbilityContext)
         }
-      });
-      // 从数据库加载黑名单
-      const blackApps = await accessControlRdb.getAppsByDomain('BLACK', 'name');
-      // 提取出处于“选中”状态的包名
-      const rejectList = blackApps.filter(a => a.isSelected).map(a => a.package_name);
-      console.log(`AccessControl 将加载 acceptList ${acceptList.length} 个，rejectList ${rejectList.length} 个`)
-      const accessControl = {
-        tunIp : clashConfig?.tun?.["tun-ip"],
-        // Capture IPv6 at the VPN layer even when Mihomo DNS/outbound IPv6 remains disabled.
-        ipv6: true,
-        routeAddress: clashConfig?.["route-address"] ?? [],
-        accessControl: { mode:appConfig?.accessControlMode ?? "", acceptList: acceptList, rejectList: rejectList } as AccessControl
-      } as VpnRawOptions
-      this.socketProxy.setOptionStates(accessControl)
-    } else {
-      const accessControl = {
-        tunIp : clashConfig?.tun?.["tun-ip"],
-        // Capture IPv6 at the VPN layer even when Mihomo DNS/outbound IPv6 remains disabled.
-        ipv6: true,
-        routeAddress: clashConfig?.["route-address"] ?? [],
-        accessControl: { mode:appConfig?.accessControlMode ?? "", acceptList: [], rejectList: [] } as AccessControl } as VpnRawOptions
-      this.socketProxy.setOptionStates(accessControl)
+        // 从数据库加载白名单
+        const whiteApps = await accessControlRdb.getAppsByDomain('WHITE', 'name');
+        acceptList = whiteApps.filter(a => a.isSelected).map(a => a.package_name);
+        // 补充强制放行的包名
+        const protectedPackages = [
+          this.context?.applicationInfo.name as string,
+          'com.atomicservice.5765880207855877209'
+        ];
+        protectedPackages.forEach(pkg => {
+          if (pkg && !acceptList.includes(pkg)) {
+            acceptList.push(pkg);
+          }
+        });
+        // 从数据库加载黑名单
+        const blackApps = await accessControlRdb.getAppsByDomain('BLACK', 'name');
+        rejectList = blackApps.filter(a => a.isSelected).map(a => a.package_name);
+        console.log(`AccessControl 将加载 acceptList ${acceptList.length} 个，rejectList ${rejectList.length} 个`)
+      } catch (e) {
+        // 访问控制数据库异常不能阻塞 VPN 启动，降级为空名单
+        console.error(`ClashViewModel.loadVpnOptions 访问控制加载失败，降级为仅保护自身: ${e.message}`)
+        acceptList = []
+        const selfPkg = this.context?.applicationInfo.name
+        if (selfPkg) {
+          acceptList.push(selfPkg)
+        }
+        rejectList = []
+      }
+    }
+    const accessControl = {
+      tunIp : clashConfig?.tun?.["tun-ip"],
+      // Capture IPv6 at the VPN layer even when Mihomo DNS/outbound IPv6 remains disabled.
+      ipv6: true,
+      routeAddress: clashConfig?.["route-address"] ?? [],
+      accessControl: { mode:appConfig?.accessControlMode ?? "", acceptList: acceptList, rejectList: rejectList } as AccessControl
+    } as VpnRawOptions
+    try {
+      const result = await this.socketProxy.setOptionStates(accessControl)
+      return result !== undefined
+    } catch (e) {
+      console.error(`ClashViewModel.loadVpnOptions setOptionStates 失败: ${e.message}`)
+      return false
     }
     // 在日志控制台 过滤关键字 vpnConfig, 验证是否配置成功
-
   }
 
   async StopVpn(){
     this.vpnStarted = false
+    const appConfig = AppStorage.get<AppConfig>('appConfig')
+    if (appConfig !== undefined) {
+      appConfig.vpnDesiredOn = false
+    }
     this.socketProxy.stopClash()
     // Index里的停止后操作
     EventHub.sendEvent(EventKey.StopedClash)

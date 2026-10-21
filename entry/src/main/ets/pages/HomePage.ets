@@ -476,7 +476,11 @@ struct Home {
       this.proxyEnabled = !this.proxyEnabled
       hilog.info(0xA002, this.componentName, `主页按钮点击后 代理启动按钮状态：${this.proxyEnabled}`)
       if (this.proxyEnabled) {
-        await ClashViewModel.StartVpn()
+        const started = await ClashViewModel.StartVpn()
+        if (!started) {
+          this.proxyEnabled = false
+          Xb_ToastUtil.showToast({ message: '代理启动失败，请检查配置、访问控制或内核状态' })
+        }
       } else {
         console.log(`Home BackgroundDownService Clash已经停止`)
         await ClashViewModel.StopVpn()

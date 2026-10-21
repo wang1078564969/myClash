@@ -216,7 +216,11 @@ export struct PXSecScreen{
                     hilog.info(0xFF00, 'StartProxy', `#WindowChange#Timer PX外屏点击事件`)
                     this.proxyEnabled = !this.proxyEnabled
                     if (this.proxyEnabled) {
-                      await ClashViewModel.StartVpn()
+                      const started = await ClashViewModel.StartVpn()
+                      if (!started) {
+                        this.proxyEnabled = false
+                        Xb_ToastUtil.showToast({ message: '代理启动失败' })
+                      }
                     } else {
                       await ClashViewModel.StopVpn()
                     }

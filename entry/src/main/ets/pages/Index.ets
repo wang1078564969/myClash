@@ -43,7 +43,7 @@ import { fileIo as fs } from '@kit.CoreFileKit';
 import { number2Time, timestampToDateTime } from '../common/utils/TimeConvertUtil'
 import { PXSecScreen } from './PXSecScreen'
 import { getResourceString } from '../common/utils/ResourceStringUtil'
-import BackgroundLocateService from '../common/utils/BackgroundLocateService'
+import KeepAliveManager from '../common/utils/KeepAliveManager'
 import { ConvertedUnit } from '../common/utils/DataUnitConvertUtils'
 import { WelcomeUserAgreement } from '../components/Start/WelcomePage'
 import { i18n } from '@kit.LocalizationKit'
@@ -67,7 +67,6 @@ import { Xb_ChangeThemeColor } from 'xb_components/src/main/ets/utils/ChangeThem
 import {
   StatusBarConfig,
   StatusBarIconResource,
-  Xb_BackgroundRunning,
   Xb_ColorModeManager,
   Xb_FloatTabBarAlignCenter,
   Xb_FloatTabBarAlignEnd,
@@ -84,7 +83,6 @@ import {
   Xb_TabTitleFontSize
 } from 'xb_components'
 import { Xb_GoToWeb } from 'xb_components/src/main/ets/utils/JumpTo'
-import BackgroundDownService from '../common/utils/BackgroundDownService'
 import { notificationManager } from '@kit.NotificationKit'
 import { BusinessError } from '@kit.BasicServicesKit'
 import { cardManager } from '../common/utils/CardManageUtil'
@@ -1068,18 +1066,11 @@ struct Index {
           }
         }, 1500)
       }
-      // 发布模拟下载通知
-      if (this.uiConfig.backgroundDownModel && this.uiConfig.Enablednotice) {
-        BackgroundDownService.start(this.getUIContext().getHostContext()!)
-      }
-      // 发布模拟定位通知
-      if (this.uiConfig.backgroundLocateModel && !this.uiConfig.backgroundKeepTask && this.uiConfig.Enablednotice) {
-        BackgroundLocateService.start(this.getUIContext().getHostContext()!)
-      }
-      // 发布任务保持通知
-      if (!this.uiConfig.backgroundLocateModel && this.uiConfig.backgroundKeepTask && this.uiConfig.Enablednotice) {
-        Xb_BackgroundRunning.start(this.getUIContext().getHostContext()!)
-      }
+      // 统一应用后台保活（单主长时任务 + PiP，失败自动 fallback）
+      KeepAliveManager.init(this.getUIContext().getHostContext()!)
+      KeepAliveManager.apply(this.getUIContext().getHostContext()!, true).catch((err: Error) => {
+        console.error(`KeepAliveManager 启动保活失败: ${err.message}`)
+      })
       // 发布实况窗
       LiveViewUtil.startLiveView().then((result) => {
         console.log(`LiveViewUtil 实况窗启动 result: ${result.resultCode} message: ${result.message}`)
@@ -1090,21 +1081,10 @@ struct Index {
     })
     // 停止Clash后
     EventHub.on(EventKey.StopedClash, () => {
-      // 停止模拟下载
-      if (this.uiConfig.backgroundDownModel) {
-        console.log(`BackgroundDownService 即将执行模拟下载停止`)
-        BackgroundDownService.stop(this.context)
-      }
-      // 停止模拟定位
-      if (this.uiConfig.backgroundLocateModel) {
-        console.log(`BackgroundLocateService 即将执行模拟定位停止`)
-        BackgroundLocateService.stop(this.context)
-      }
-      // 停止任务保持
-      if (this.uiConfig.backgroundKeepTask) {
-        console.log(`BackgroundLocateService 即将执行任务保持停止`)
-        Xb_BackgroundRunning.stop(this.context)
-      }
+      // 统一停止后台保活
+      KeepAliveManager.apply(this.context, false).catch((err: Error) => {
+        console.error(`KeepAliveManager 停止保活失败: ${err.message}`)
+      })
       clearInterval(this.trafficJob)
       // 取消通知
       if (this.uiConfig.Enablednotice && this.uiConfig.EnabledPermanentnotice) {
@@ -1411,16 +1391,10 @@ struct Index {
     if (deviceInfo.deviceType === 'tablet') {
       PipManager.getInstance().updateContentSize(80, 30)
     }
-    if (this.uiConfig.backgroundPiPModel && this.proxyEnabled) {
-      // 创建画中画控制器
-      PipManager.getInstance().init(this.context)
-      // 禁用自动启用
-      PipManager.getInstance().setAutoStart(true)
-      hilog.info(0xFF00, "PipTag", "代理启用状态： %{public}s", this.proxyEnabled)
-      hilog.info(0xFF00, "PipTag", "画中画启用状态： %{public}s", this.uiConfig.backgroundPiPModel)
-    } else {
-      PipManager.getInstance().setAutoStart(false)
-    }
+    // 长时任务 + PiP 由 KeepAliveManager 统一决策
+    KeepAliveManager.apply(this.context, this.proxyEnabled).catch((err: Error) => {
+      console.error(`KeepAliveManager ShowPipChange 失败: ${err.message}`)
+    })
   }
 
   onPageShow(): void {

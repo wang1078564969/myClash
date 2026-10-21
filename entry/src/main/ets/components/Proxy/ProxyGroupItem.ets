@@ -342,7 +342,7 @@ struct ProxyGroupItem {
       if (this.appConfig.clashCore === ClashCore.mihomo) {
         MenuItem({ symbolStartIcon: startIconModifier1, content: $r('app.string.Test_Delay') })
           .onClick(() => {
-            ClashViewModel.testDelay(item.name)
+            ClashViewModel.testDelay(item.name, true)
           })
       }
       // 暂时先屏蔽网站测速功能

@@ -221,7 +221,7 @@ export class ClashViewModel {
 
   delayMap: Map<string, DelayInfo> = new Map()
 
-  async testDelay(proxyName: string): Promise<number>{
+  async testDelay(proxyName: string, showError: boolean = true): Promise<number>{
     try {
       EventHub.sendEvent(EventKey.TestDelay, { name: proxyName, delay: 0 } as DelayInfo)
       let delay = await this.socketProxy.healthCheck(proxyName)
@@ -230,13 +230,22 @@ export class ClashViewModel {
       this.delayMap.set(proxyName, { name: proxyName, delay: delay } as DelayInfo)
       return delay;
     } catch (e) {
-      ClashViewModel.promptAction.showToast({message: e.message, duration: 3000})
+      // sendMessageRequest 内部 reject 的是字符串（"请求超时" / "VPN服务未启动"），
+      // 不是 Error，取 e.message 会拿到 undefined，
+      // 再传给 showToast 会抛 401「The type of message is incorrect」，
+      // 把真正的失败原因完全掩盖掉。这里统一取字符串形式。
+      const message = `${e?.message ?? e}`
+      console.error(`ProxySort testDelay [${proxyName}] 测速失败: ${message}`)
+      if (showError) {
+        ClashViewModel.promptAction.showToast({ message: message, duration: 3000 })
+      }
     }
     return -1;
   }
 
   async testAllDelay(list: ProxyItem[]): Promise<number[]>{
-    const result = await Promise.all(list.map((l)=> this.testDelay(l.name)))
+    // 批量测速时不逐个弹 toast（几十个节点会刷屏），失败统一在调用方提示
+    const result = await Promise.all(list.map((l)=> this.testDelay(l.name, false)))
     let appConfig = AppStorage.get<AppConfig>("appConfig")
     if (appConfig?.proxySort === ProxySort.Delay) {
       EventHub.sendEvent(EventKey.FetchProxyGroup)

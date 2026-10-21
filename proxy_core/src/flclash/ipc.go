@@ -13,6 +13,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/metacubex/mihomo/constant"
@@ -66,16 +67,32 @@ func handleConnection(conn net.Conn) {
 		log.Println("ipc_go error", err)
 		return
 	}
+
+	// 响应必须等 handler 真正回调后才能关闭连接。
+	//
+	// 旧实现把 conn.Close() 挂在 defer 上，handleRemoteRequest 一返回就开始关连接；
+	// 而 HealthCheck / HealthCheckBatch / UpdateGeoData / UpdateProvider / ChangeProxy
+	// 等 handler 是异步的（内部起 goroutine 或依赖 batch 并发池），
+	// 回调往往在几十毫秒到数秒后（测速要等 URLTest 拿到结果）才执行，
+	// 此时 conn 已被关闭 → conn.Write 返回 "use of closed network connection"，
+	// 错误被忽略 → JS 侧收不到任何数据 → 只能等满 10s RPC 超时。
+	// 该现象与网络无关，表现为「延迟测试不生效」。
+	//
+	// 这里改为：用 done channel 等异步回调写完响应再关闭。
+	done := make(chan struct{})
+	var doneOnce sync.Once
 	handleRemoteRequest(request, func(rr RpcResult) {
 		res, _ := json.Marshal(rr)
-		conn.Write([]byte(string(res) + "EOF"))
+		if _, err := conn.Write([]byte(string(res) + "EOF")); err != nil {
+			log.Println("ipc_go write result err:", err)
+		}
+		doneOnce.Do(func() { close(done) })
 	})
-	if request.Method == StartClash {
-		// StartClash 后连接必须保持打开：TUN 存续期间所有出站 socket 的
-		// protect 消息都通过该连接异步下发到 JS 侧（protect → setFdMap →
-		// 唤醒 Go 侧等待 channel）。旧实现处理完立即 defer conn.Close()，
-		// protect 消息全部写往已关闭连接被静默丢弃，JS 从未执行过 protect。
-		// 此处阻塞等待 JS 侧关闭（stopVpn → clashSocket.close() → EOF）。
+
+	if isStreamingMethod(request.Method) {
+		// 流式接口（日志订阅、StartClash 的 protect 通道）：回调会持续触发，
+		// 连接必须保持打开直到对端主动关闭（JS close → EOF），
+		// 否则首批回调之后的日志/protect 消息全部写往已关闭连接。
 		drain := make([]byte, 256)
 		for {
 			if _, err := conn.Read(drain); err != nil {
@@ -83,6 +100,26 @@ func handleConnection(conn net.Conn) {
 			}
 		}
 	}
+
+	// 兜底超时：handler 若始终不回调也不能永久占住连接与 goroutine
+	select {
+	case <-done:
+	case <-time.After(ipcResponseTimeout):
+		log.Println("ipc_go wait result timeout, method:", int(request.Method))
+	}
+}
+
+// ipcResponseTimeout 单次 RPC 的响应等待上限，需大于 JS 侧最长的 RPC 超时
+// （downloadConfig 为 15s），避免服务端先放弃而 JS 还在正常等待。
+const ipcResponseTimeout = 30 * time.Second
+
+// isStreamingMethod 判断该 RPC 是否为流式（会多次回调、且由对端决定何时结束）。
+func isStreamingMethod(method ClashRpcType) bool {
+	switch method {
+	case SetLogObserver, StartClash:
+		return true
+	}
+	return false
 }
 
 type RpcRequest struct {
@@ -332,12 +369,12 @@ func handleRemoteRequest(request RpcRequest, fn func(RpcResult)) {
 		ret.Result = ""
 		fn(ret)
 	case HealthCheckBatch:
-	  paramsString, _ := request.Params[0].(string)
-	  handleAsyncTestDelayBatch(paramsString, func(value string) {
-	   ret.Result = value
-	   fn(ret)
-	  })
-	 case GetVersion:
+		paramsString, _ := request.Params[0].(string)
+		handleAsyncTestDelayBatch(paramsString, func(value string) {
+			ret.Result = value
+			fn(ret)
+		})
+	case GetVersion:
 		ver := constant.Version
 		if ver == "" {
 			ver = "Mihomo-release-v1.19.27"

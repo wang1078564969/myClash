@@ -537,9 +537,12 @@ struct ProxyPage {
         if (this.appConfig.proxySort === ProxySort.Delay && results) {
           this.needChangeSort = true
         }
-        console.error(`ProxySort message: ${err.message}, code: ${err.code}`)
+        // 统一取字符串形式：底层 reject 的是字符串，e.message 会是 undefined
+        console.error(`ProxySort 测速异常: ${err?.message ?? err}`)
       }
-      if (!results) {
+      // results 恒为数组，不能用 !results 判断失败；
+      // 全部节点都失败（-1）才是真的没测出来
+      if (results.length > 0 && results.every((delay: number) => delay < 0)) {
         Xb_ToastUtil.showToast({ message: `延迟测试失败，请检查测试用链接`, duration: 3000})
       }
       if (this.uiConfig.isVibrate) {

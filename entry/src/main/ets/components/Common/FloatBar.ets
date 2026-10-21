@@ -161,16 +161,21 @@ export struct FloatBar {
             .barFloatingStyle(this.getHdsTabBarStyle())
             .width('100%')
             .height('100%')
+            // 装饰性页签栏（TabContent 为空），本身不需要切换动画，否则要等动画跑完才回调 onChange
+            .animationDuration(0)
             // 系统隐藏后节点仍在树上，需连同内部子节点一起退出触摸测试
             .hitTestBehavior(this.hdsBarHidden ? HitTestMode.BLOCK_DESCENDANTS : HitTestMode.Default)
+            // 点击页签立即切内容页（onTabBarClick 在点击瞬间回调，onChange 要等切换动画结束）
+            .onTabBarClick((index: number) => {
+              this.switchPage(index)
+            })
             .onChange((index: number) => {
-              Xb_AnimationStyle.animToAPI18(() => {
-                this.tabCurrentPage = index
-              }, this.uiConfig.animationSpeed, 'app')
-              this.swiperController.changeIndex(index, true)
+              // 兜底同步：已由 onTabBarClick 处理过的点击在此被去重
+              this.switchPage(index)
             })
             .onAppear(() => {
-              this.swiperController.changeIndex(this.tabCurrentPage, true)
+              // 挂载时只做无动画对齐，避免首帧多播一次切换动画
+              this.swiperController.changeIndex(this.tabCurrentPage, false)
               // 挂载时与控制器的显隐意图对齐（例如启动即处于滚动收起态）
               this.hdsBarHidden = false
               this.applyHdsBarVisibility(!this.isRollingCircle())
@@ -198,14 +203,17 @@ export struct FloatBar {
             .barFloatingStyle(this.getImmersiveTabBarStyle())
             .width(this.getCollapseBarWidth())
             .height('100%')
+            // 装饰性页签栏（TabContent 为空），关掉自身切换动画，让点击即时生效
+            .animationDuration(0)
+            .onTabBarClick((index: number) => {
+              this.switchPage(index)
+            })
             .onChange((index: number) => {
-              Xb_AnimationStyle.animToAPI18(() => {
-                this.tabCurrentPage = index
-              }, this.uiConfig.animationSpeed, 'app')
-              this.swiperController.changeIndex(index, true)
+              // 兜底同步：已由 onTabBarClick 处理过的点击在此被去重
+              this.switchPage(index)
             })
             .onAppear(() => {
-              this.swiperController.changeIndex(this.tabCurrentPage, true)
+              this.swiperController.changeIndex(this.tabCurrentPage, false)
             })
           }
           // 收缩终点：HDS 原生隐藏后保留当前页签圆钮，随折叠进度在栏左端放大淡入
@@ -368,7 +376,7 @@ export struct FloatBar {
           type: ShadowType.COLOR,
         })
         .onAppear(() => {
-          this.swiperController.changeIndex(this.tabCurrentPage, true)
+          this.swiperController.changeIndex(this.tabCurrentPage, false)
         })
       }
 
@@ -543,6 +551,22 @@ export struct FloatBar {
     } catch (error) {
       // 页签栏未挂载时忽略
     }
+  }
+
+  /**
+   * 切换页签：立刻更新选中态并切内容页。
+   * 旧实现把切页动作放在 onChange 里，而 onChange 是页签切换完成（动画结束）后才回调，
+   * 表现为「点一下要顿一下才开始切页」；页签栏本身是空 TabContent 的装饰件，
+   * 所以改为在 onTabBarClick（点击瞬间）直接切 Swiper，onChange 仅作去重兜底。
+   */
+  private switchPage(index: number): void {
+    if (index === this.tabCurrentPage) {
+      return
+    }
+    Xb_AnimationStyle.animToAPI18(() => {
+      this.tabCurrentPage = index
+    }, this.uiConfig.animationSpeed, 'app')
+    this.swiperController.changeIndex(index, true)
   }
 
   @Builder

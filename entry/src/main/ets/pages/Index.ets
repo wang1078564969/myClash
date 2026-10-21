@@ -522,6 +522,8 @@ struct Index {
     }
     .zIndex(1)
     .backgroundColor($r('app.color.background'))
+    // 页签切换动画时长跟随「动画速度」设置（未设置时系统默认为 300ms，且与关闭动画的开关无关）
+    .animationDuration(this.uiConfig.isAnimation ? this.uiConfig.animationSpeed : 0)
     .barOverlap(this.useImmersiveBottomTabBar())
     .barFloatingStyle(this.getImmersiveTabBarStyle())
     .scrollable(!this.isSecondary)
@@ -532,23 +534,28 @@ struct Index {
       this.barHeight : this.bottomRectHeight == 0 ? TabBarHeight(this.widthBp, this.heightBp) :
         TabBarAvoidHeight(this.widthBp, this.heightBp))
     .onTabBarClick((index: number) => {
+      // 点击瞬间就更新页签高亮，不等切换动画结束（onChange 是切换完成后才回调）
       Xb_AnimationStyle.animToAPI18(() => {
         this.tabCurrentPage = index
+        this.isHomePage = index == 0
       },this.uiConfig.animationSpeed, 'app', 0)
     })
     .onChange((index) => {
-      Xb_AnimationStyle.animToAPI18(() => {
-        this.tabCurrentPage = index
-        if (index == 0) {
-          this.isHomePage = true
-          return
-        }
-        this.isHomePage = false
-      },this.uiConfig.animationSpeed, 'app', 0)
+      // 兜底：滑动等非点击来源的切换，避免重复刷新
+      if (this.tabCurrentPage !== index) {
+        Xb_AnimationStyle.animToAPI18(() => {
+          this.tabCurrentPage = index
+          this.isHomePage = index == 0
+        },this.uiConfig.animationSpeed, 'app', 0)
+      }
     })
     .onAnimationStart((index: number, targetIndex: number) => {
+      if (index === targetIndex) {
+        return
+      }
       Xb_AnimationStyle.animToAPI18(() => {
         this.tabCurrentPage = targetIndex;
+        this.isHomePage = targetIndex == 0
       },this.uiConfig.animationSpeed, 'app', 0)
     })
     .onAppear(() => {
@@ -581,6 +588,10 @@ struct Index {
     //    { fractionStops: [[0, 0.3],[0, 0.85],[0.7, 0.9],[1, 1]], direction: GradientDirection.Bottom })
       .cachedCount(0)
       .indicator(false).loop(false)
+      // 切页时长跟随「动画速度」设置：Swiper 默认的 interpolatingSpring 曲线会忽略 duration，
+      // 这里换成系统 Tabs 点击切页同款曲线，让设置的动画时长真正生效（关闭动画时 duration 为 0）
+      .duration(this.uiConfig.isAnimation ? this.uiConfig.animationSpeed : 0)
+      .curve(curves.cubicBezierCurve(0.2, 0.0, 0.1, 1.0))
       .width('100%').height('100%')
       .padding({
         top: this.topRectHeight,
@@ -588,8 +599,14 @@ struct Index {
       })
       .vertical(Xb_TabBarVertical(this.widthBp, this.heightBp))
       .onAnimationStart((startIndex: number, targetIndex: number, extraInfo: SwiperAnimationEvent) => {
+        // 只同步选中态；不要在这里再调 changeIndex，否则会打断/重启正在播放的切换动画
         this.tabCurrentPage = targetIndex
-        swiperController.changeIndex(targetIndex, true)
+      })
+      // 兜底：动画关闭（duration 为 0）时部分场景不回调 onAnimationStart
+      .onChange((index: number) => {
+        if (this.tabCurrentPage !== index) {
+          this.tabCurrentPage = index
+        }
       })
 
       // tab栏（抽离成组件）

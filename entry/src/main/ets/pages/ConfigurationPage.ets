@@ -702,7 +702,7 @@ struct ConfigurationPage {
   async aboutToAppear(): Promise<void> {
     hilog.info(0xC000, componentName, `#aboutToAppear executed`)
     // 初始化当前选中项数据
-    this.currentRadioConfigData = this.configList.find((data: ConfigData) => data.configId === this.appConfig.currentProfileId) ?? NewConfigData
+    this.syncRadioConfigData()
     // 初始化分享工具
     Xb_Share.inputInfo(this.getUIContext())
     // 注册打开添加配置弹窗事件
@@ -715,6 +715,21 @@ struct ConfigurationPage {
         customVibrator.vibratorTriggerOfHapticClockTimer()
       }
     })
+  }
+
+  /**
+   * 根据当前生效的配置 id 同步「单选选中项」数据
+   * 配置页可能在配置列表加载完成之前就执行 aboutToAppear（四个 Tab 页启动时全部构建），
+   * 此时找不到匹配项会落到 `NewConfigData` 占位数据，因此列表变化后需要重新同步，
+   * 否则后续「刷新配置」会用占位数据覆盖 `currentProfileId`，导致选中态被清空。
+   */
+  private syncRadioConfigData(): void {
+    const selected = this.configList.find((data: ConfigData) => data.configId === this.appConfig.currentProfileId)
+    // 找不到匹配项（列表尚未加载完成、或当前配置已被删除）时回到占位数据，
+    // 由 loadConfig 中的占位数据保护确保不会把无效 id 写进 currentProfileId
+    this.currentRadioConfigData = selected ?? NewConfigData
+    hilog.info(0xC011, componentName,
+      `#syncRadioConfigData#currentProfileId: [${this.appConfig.currentProfileId}] 选中项: [${this.currentRadioConfigData.configId}] 列表长度: [${this.configList.length}]`)
   }
 
   async onDidBuild(): Promise<void> {
@@ -740,10 +755,19 @@ struct ConfigurationPage {
     }, () => {
       this.isLoading = true;
     })
-    this.appConfig.currentProfileName = item.configName
-    this.appConfig.currentProfileId = item.configId
+    // 占位数据（configId 为 'new'）不对应任何真实配置，不能写入 `currentProfileId`，
+    // 否则「当前生效配置」会被覆盖成无效 id，配置列表的选中态随之消失。
+    // 例如配置列表加载完成之前执行 aboutToAppear，或列表刷新后单选数据尚未同步的场景。
+    const hasRealTarget = item.configId !== NewConfigData.configId
+    if (hasRealTarget) {
+      this.appConfig.currentProfileName = item.configName
+      this.appConfig.currentProfileId = item.configId
+    } else {
+      hilog.warn(0xC011, componentName,
+        `#loadConfig#选中项为占位数据，跳过覆盖当前配置，沿用 currentProfileId: [${this.appConfig.currentProfileId}]`)
+    }
     try {
-      if (needUpdated && !item.disableUpdate) {
+      if (hasRealTarget && needUpdated && !item.disableUpdate) {
         ClashViewModel.updateProfileConfig(item.configId)
       }
       await ClashViewModel.socketProxy.reset()
@@ -765,6 +789,9 @@ struct ConfigurationPage {
 
   async onConfigListChange() {
     hilog.info(0xC011, componentName, `EditConfig #onConfigListChange#配置列表长度: [${this.configList.length}]`)
+    // 配置列表可能在页面挂载之后才加载完成，列表变化后重新对齐「单选选中项」
+    // 注意：必须在下面的提前 return 之前执行，否则非首次导入的场景永远不会同步
+    this.syncRadioConfigData()
     if (!this.uiConfig.isFirstImportConfig || this.isClearData) {
       hilog.info(0xC011, componentName, `EditConfig #onConfigListChange#设置数据清除: [${this.isClearData}]`)
       this.isClearData = false
@@ -834,6 +861,11 @@ struct ConfigurationPage {
   /**更新配置*/
   private async updateConfig(configId?: string): Promise<void> {
     Xb_ToastUtil.showToast({message: $r('app.string.updating_config')})
+    // 兜底：单选数据若仍是占位数据（配置列表尚未同步完成），先按当前生效配置对齐，
+    // 保证「刷新」作用于用户看到的那个选中配置，而不是占位数据
+    if (this.currentRadioConfigData.configId === NewConfigData.configId) {
+      this.syncRadioConfigData()
+    }
     this.loadConfig(this.currentRadioConfigData, !this.currentRadioConfigData.disableUpdate)
     if (configId) {
       this.isRefreshing = false

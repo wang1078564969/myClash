@@ -368,18 +368,36 @@ export class ClashViewModel {
         console.error(`ClashViewModel.ChangeCore restart过程中VPN进程终止失败: ${JSON.stringify(error)}`)
       }
     }
-    await new Promise<boolean>( async (resolve, reject)=>{
-      try {
-        await vpnExtension.startVpnExtensionAbility(vpnWant)
-      } catch(e) {
+    await new Promise<void>((resolve) => {
+      let settled = false
+      let timeoutId: number = -1
+      const finish = () => {
+        if (settled) {
+          return
+        }
+        settled = true
+        if (timeoutId !== -1) {
+          clearTimeout(timeoutId)
+        }
+        resolve()
+      }
+      timeoutId = setTimeout(() => {
+        if (settled) {
+          return
+        }
+        settled = true
+        console.error('ClashViewModel.ChangeCore 启动VPN扩展超时')
+        resolve()
+      }, 10000)
+      vpnExtension.startVpnExtensionAbility(vpnWant).then(() => {
+        finish()
+      }).catch((e: Error) => {
+        console.error(`ClashViewModel.ChangeCore 启动VPN扩展失败: ${e.message}`)
         this.context?.getApplicationContext().killAllProcesses().catch((err: Error) => {
           console.error(`ClashViewModel.ChangeCore 应用进程终止失败: ${JSON.stringify(err)}`)
         })
-      }
-      resolve(true)
-      setTimeout(() =>{
-        reject(false)
-      }, 10000)
+        finish()
+      })
     })
     await sleep(600)
     let result = await this.checkVpnVpnAbility(requestId)
@@ -391,19 +409,23 @@ export class ClashViewModel {
 
   private async checkVpnVpnAbility(reqId: number): Promise<boolean>{
     let lockPath = this.context?.filesDir + '/vpn_ipc.lock';
-    try {
-      if (!await fs.access(lockPath, fs.AccessModeType.EXIST)) {
-        console.log('ClashViewModel.checkVpnVpnAbility 检查文件vpn_ipc.lock是否存在 access成功：', true)
-        return true;
-      } else {
-        let requestId = await readText(lockPath)
-        console.log('ClashViewModel.checkVpnVpnAbility 检查文件vpn_ipc.lock是否存在 readText成功：', requestId == reqId + "")
-        return requestId == reqId + "";
+    // startVpnExtensionAbility 返回时 onCreate 可能还没执行完，给 lock 写入留出轮询时间
+    for (let attempt = 0; attempt < 6; attempt++) {
+      try {
+        if (await fs.access(lockPath, fs.AccessModeType.EXIST)) {
+          let requestId = await readText(lockPath)
+          if (requestId == reqId + "") {
+            console.log('ClashViewModel.checkVpnVpnAbility lock 校验成功')
+            return true
+          }
+        }
+      } catch (error) {
+        console.error('ClashViewModel.checkVpnVpnAbility 检查 vpn_ipc.lock 失败：', error)
       }
-    } catch (error) {
-      console.error('ClashViewModel.checkVpnVpnAbility 检查文件vpn_ipc.lock是否存在失败：', error)
-      return false
+      await sleep(300)
     }
+    console.log('ClashViewModel.checkVpnVpnAbility vpn_ipc.lock 不存在或 requestId 不匹配，判定启动失败')
+    return false
   }
 
   async loadProfileAndConfig(id: string, config: ClashConfig | null = null, params: ConfigExtendedParams | null= null){
@@ -417,12 +439,26 @@ export class ClashViewModel {
     }
     EventHub.sendEvent(EventKey.FetchProxyGroup, null)
   }
-  async ReStartVpn(){
-    if(this.vpnStarted){
-      await this.loadConfig(false, 'ReStartVpn')
+  async ReStartVpn(): Promise<boolean> {
+    if (!this.vpnStarted) {
+      return true
+    }
+    try {
+      const configLoaded = await this.loadConfig(false, 'ReStartVpn')
+      if (!configLoaded) {
+        console.error('ClashViewModel.ReStartVpn 配置加载失败')
+        return false
+      }
       await this.loadVpnOptions()
       await this.socketProxy.stopClash()
-      await this.socketProxy.startClash()
+      const started = await this.socketProxy.startClash()
+      if (!started) {
+        console.error('ClashViewModel.ReStartVpn startClash 失败')
+      }
+      return started
+    } catch (e) {
+      console.error(`ClashViewModel.ReStartVpn 失败: ${e.message}`)
+      return false
     }
   }
   vpnStarted = false
@@ -531,14 +567,17 @@ export class ClashViewModel {
   async initProfile() {
     let appConfig = AppStorage.get<AppConfig>("appConfig") || cardManager.getAppConfig()
     EventHub.sendEvent(EventKey.StartLog, appConfig?.enableLogger)
-    await this.loadConfig(false, 'initProfile')
+    const configLoaded = await this.loadConfig(false, 'initProfile')
+    if (!configLoaded) {
+      console.error("ClashViewModel.initProfile 配置加载失败")
+    }
     EventHub.sendEvent(EventKey.FetchProxyGroup)
-    console.error("ClashViewModel.initProfile 初始化成功");
+    console.error("ClashViewModel.initProfile 初始化完成");
   }
 
   proxyGroups :ProxyGroup[] = []
 
-  async loadConfig(patch: boolean = true, name?: string) {
+  async loadConfig(patch: boolean = true, name?: string): Promise<boolean> {
     console.error(`ClashViewModel.loadConfig 调用方：${name} patch：${patch} 配置开始加载`)
     let appConfig = AppStorage.get<AppConfig>("appConfig") || cardManager.getAppConfig()
     let clashConfig = AppStorage.get<ClashConfig>("clashConfig") || cardManager.getClashConfig()
@@ -551,8 +590,10 @@ export class ClashViewModel {
         "selected-map": profile?.getSelectedMap()
       } as ConfigExtendedParams)
       console.log(`ClashViewModel.loadConfig 调用方：${name} patch：${patch} 配加载成功`)
+      return true
     } catch (e) {
       console.error('ClashViewModel.loadConfig 配置加载失败：', e)
+      return false
     }
   }
 

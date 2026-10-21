@@ -31,6 +31,7 @@ interface TrafficInfo{
 export class SocketProxyService implements IClashManager {
   context?: common.Context
   active: boolean = false
+  lastFailureReason: string = ''
   @Trace offlineTime: number[] = []
   private textDecoder: util.TextDecoder = new util.TextDecoder()
   /**
@@ -42,6 +43,13 @@ export class SocketProxyService implements IClashManager {
 
   init(context: common.Context) {
     this.context = context
+  }
+
+  /** 标记核心不健康：看门狗只需要看 active，不需要每个调用方自己判断 */
+  private markUnhealthy(reason: string): void {
+    this.active = false
+    this.lastFailureReason = reason
+    this.notifyConnectionRefused(new Error(reason))
   }
 
   /** 检测 connection refused 类错误并触发全局自愈回调 */
@@ -326,6 +334,7 @@ export class SocketProxyService implements IClashManager {
       let client: socket.LocalSocket = socket.constructLocalSocketInstance();
       let fullMessage = '';
       let timeout = true
+      let gotMessage = false
       let timeoutId: number | undefined
       let parseMessage = debounce((message)=>{
         timeout = false
@@ -338,6 +347,7 @@ export class SocketProxyService implements IClashManager {
         client.close()
       }, 200)
       client.on('message', async (value: socket.LocalSocketMessageInfo) => {
+        gotMessage = true
         let chunk = this.textDecoder.decodeToString(new Uint8Array(value.message),  { stream: true })
         fullMessage += chunk;
         parseMessage(fullMessage)
@@ -349,13 +359,22 @@ export class SocketProxyService implements IClashManager {
           client.off('message')
           client.off('error')
           client.close()
+          // 下载配置可能本身很慢，不作为核心健康判定
+          if (method !== ClashRpcType.downloadConfig) {
+            this.markUnhealthy("请求超时")
+          }
           reject("请求超时")
         }
       }, rpcTimeout)
       client.on("error", ()=>{
+        // 正常响应后主动 close() 也可能触发 error，避免把成功请求误判为不健康
+        if (!timeout || gotMessage) {
+          return
+        }
         if (timeoutId !== undefined) clearTimeout(timeoutId)
         client.off('message')
         client.off('error')
+        this.markUnhealthy("rpc client error")
         reject("rpc client error")
       })
       // {"proxy-name":"♻️自动选择","timeout":3000}
@@ -364,16 +383,25 @@ export class SocketProxyService implements IClashManager {
       if (method == ClashRpcType.startClash || method == ClashRpcType.stopClash){
         socketPath = this.context?.filesDir + '/ClashBox.sock'
       }
-      if(! await fileIo.access(socketPath)){
+      let socketExists = false
+      try {
+        socketExists = await fileIo.access(socketPath)
+      } catch (e) {
+        this.markUnhealthy("检查VPN服务socket失败")
+        reject(e)
+        return;
+      }
+      if(!socketExists){
+        this.markUnhealthy("VPN服务未启动")
         reject("VPN服务未启动")
         return;
       }
       tryConnect(client, socketPath, 3, 500).then(async ()=>{
         this.active = true
+        this.lastFailureReason = ''
         client.send({ data: JSON.stringify({method, params}) });
       }).catch((e:Error)=>{
-        this.active = false
-        this.notifyConnectionRefused(e)
+        this.markUnhealthy(e.message ?? "VPN服务连接失败")
         reject(e)
       });
     })
@@ -403,16 +431,28 @@ export class SocketProxyService implements IClashManager {
       tcp.on('error', (e: Error) => {
         tcp.off('message')
         tcp.off('error')
+        this.markUnhealthy("事件订阅连接错误")
         reject("失败")
       });
       const socketPath = this.context?.filesDir + '/clash_go.sock'
       // 与 sendMessageRequest 保持一致：先检查 socket 文件是否存在，再带重试连接，
       // 解决启动时 socket 文件已存在但服务端尚未 listen 的竞态问题，避免日志订阅静默失败
-      if (!await fileIo.access(socketPath)) {
+      let callbackSocketExists = false
+      try {
+        callbackSocketExists = await fileIo.access(socketPath)
+      } catch (e) {
+        this.markUnhealthy("检查VPN服务socket失败")
+        reject(e)
+        return;
+      }
+      if (!callbackSocketExists) {
+        this.markUnhealthy("VPN服务未启动")
         reject("VPN服务未启动")
         return;
       }
       tryConnect(tcp, socketPath, 3, 500).then(()=>{
+        this.active = true
+        this.lastFailureReason = ''
         tcp.send({ data: JSON.stringify({method, params}) });
         resolve(()=>{
           tcp.off('message')
@@ -421,7 +461,7 @@ export class SocketProxyService implements IClashManager {
         })
       }).catch((e: Error)=>{
         console.log("socketProxy error", e.message)
-        this.notifyConnectionRefused(e)
+        this.markUnhealthy(e.message ?? "VPN服务连接失败")
         reject(e)
       });
     })

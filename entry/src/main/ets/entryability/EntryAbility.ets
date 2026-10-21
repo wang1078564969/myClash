@@ -33,12 +33,28 @@ import ConfigAutoUpdateService from '../common/utils/ConfigAutoUpdateService';
 import BuildProfile from 'BuildProfile';
 import { accessControlRdb } from '../common/datasources/AccessControlRdb';
 
+/** 核心连续不健康多少次后开始恢复，避免单次 RPC 抖动触发整核重启 */
+const CORE_UNHEALTHY_THRESHOLD: number = 3
+/** 恢复失败后的最大退避时间 */
+const CORE_RECOVERY_MAX_BACKOFF_MS: number = 30000
+
 
 export default class EntryAbility extends UIAbility {
   private want?: Want
-  private isChangeCore = false
   private windowMode: boolean = false
   private isFirstStart: boolean = true
+  /** 核心健康看门狗定时器 */
+  private coreWatchdogTimer: number = -1
+  /** 是否正在恢复核心，避免重入 */
+  private coreRecovering: boolean = false
+  /** 连续不健康次数 */
+  private coreUnhealthyTicks: number = 0
+  /** 连续恢复失败次数 */
+  private coreRecoveryAttempts: number = 0
+  /** 下一次允许尝试恢复的时间 */
+  private coreNextRecoveryAt: number = 0
+  /** 本次掉线是否已经记录/提示过 */
+  private coreDropRecorded: boolean = false
   // 设备断点获取
   private uiContext?: UIContext;
   private debugVpn: SocketStubService | null = null
@@ -391,6 +407,7 @@ export default class EntryAbility extends UIAbility {
 
   onDestroy(): void {
     hilog.info(0x0000, 'EntryAbility', '%{public}s', 'Ability onDestroy');
+    this.stopCoreWatchdog()
     this.saveConfigThePreferences()
     // 移除卡片监听事件
     this.unRegisterCardEvent()
@@ -497,36 +514,35 @@ export default class EntryAbility extends UIAbility {
 
   /** @description 初始化Clash核心 */
   private async ClashCoreInit() {
-    const clashCore = (AppStorage.get<AppConfig>("appConfig") || cardManager.getAppConfig())?.clashCore
-    await ClashViewModel.ChangeCore(clashCore);
-    this.isChangeCore = true
-    if (clashCore != ClashCore.mihomo) {
-      let service = new SocketStubService(this.context);
-      await service.startService(Date.now());
+    const clashCore = (AppStorage.get<AppConfig>("appConfig") || cardManager.getAppConfig())?.clashCore ?? ClashCore.mihomo
+    const coreStarted = await ClashViewModel.ChangeCore(clashCore);
+    if (!coreStarted) {
+      hilog.error(0x0000, 'EntryAbility', 'Clash核心启动校验失败，等待看门狗恢复');
     }
-    await ClashViewModel.initProfile();
+    if (clashCore != ClashCore.mihomo) {
+      // 前台模式：UI 进程自己持有内核宿主，必须保存引用，恢复时才能重建
+      try {
+        this.debugVpn = new SocketStubService(this.context);
+        const uiCoreStarted = await this.debugVpn.startService(Date.now());
+        if (!uiCoreStarted) {
+          hilog.error(0x0000, 'EntryAbility', '前台模式 UI 内核启动失败');
+          this.debugVpn = null;
+        }
+      } catch (e) {
+        hilog.error(0x0000, 'EntryAbility', '前台模式 UI 内核初始化异常: %{public}s', JSON.stringify(e) ?? '');
+        this.debugVpn = null;
+      }
+    }
+    // 先挂看门狗，再初始化配置，避免初始化失败后完全没有恢复能力
+    this.startCoreWatchdog(clashCore);
+    try {
+      await ClashViewModel.initProfile();
+    } catch (e) {
+      hilog.error(0x0000, 'EntryAbility', '初始化配置失败: %{public}s', JSON.stringify(e) ?? '');
+    }
     EventHub.on(EventKey.LoadClashConfig, (isPatch: boolean) => {
       ClashViewModel.loadConfig(isPatch, 'ClashCoreInit-EventKey.LoadClashConfig');
     });
-    // 监测vpn服务是否被回收，并且重新启动
-    setInterval(async () => {
-      if (!ClashViewModel.socketProxy.active) {
-        ClashViewModel.socketProxy.active = true;
-        ClashViewModel.socketProxy.offlineTime.push(Date.now());
-        Xb_ToastUtil.showToast({
-          message: `核心恢复中(${ClashViewModel.socketProxy.offlineTime.length})...`
-        });
-        // let clashCore = AppStorage.get<AppConfig>("appConfig")?.clashCore;
-        if (!this.isChangeCore) {
-          let result = await ClashViewModel.ChangeCore(clashCore);
-          if (result) {
-            await ClashViewModel.ReStartVpn();
-          }
-        } else {
-          this.isChangeCore = false
-        }
-      }
-    }, 1000);
     EventHub.sendEvent(EventKey.checkIpInfo);
     hilog.info(0x0000, 'EntryAbility', 'Succeeded in loading the content.');
 
@@ -534,6 +550,134 @@ export default class EntryAbility extends UIAbility {
 
     // 启动配置自动更新服务
     await this.startConfigAutoUpdateService();
+  }
+
+  /** @description 启动核心健康看门狗 */
+  private startCoreWatchdog(clashCore: ClashCore): void {
+    if (this.coreWatchdogTimer !== -1) {
+      return
+    }
+    this.coreWatchdogTimer = setInterval(async () => {
+      try {
+        await this.checkCoreHealth(clashCore)
+      } catch (e) {
+        hilog.error(0x0000, 'EntryAbility', '核心健康检查异常: %{public}s', JSON.stringify(e) ?? '')
+      }
+    }, 1000)
+  }
+
+  /** @description 停止核心健康看门狗 */
+  private stopCoreWatchdog(): void {
+    if (this.coreWatchdogTimer !== -1) {
+      clearInterval(this.coreWatchdogTimer)
+      this.coreWatchdogTimer = -1
+    }
+  }
+
+  /** @description 重置健康/恢复状态 */
+  private resetCoreHealthState(): void {
+    this.coreUnhealthyTicks = 0
+    this.coreRecoveryAttempts = 0
+    this.coreNextRecoveryAt = 0
+    this.coreDropRecorded = false
+  }
+
+  /** @description 检查核心健康，连续失败达到阈值后进入恢复流程 */
+  private async checkCoreHealth(clashCore: ClashCore): Promise<void> {
+    if (this.coreRecovering) {
+      return
+    }
+    // 用户没有开启代理时不做恢复，避免停止后又被看门狗重新拉起
+    if (!ClashViewModel.vpnStarted) {
+      this.resetCoreHealthState()
+      return
+    }
+    if (ClashViewModel.socketProxy.active) {
+      this.resetCoreHealthState()
+      return
+    }
+    this.coreUnhealthyTicks++
+    if (this.coreUnhealthyTicks < CORE_UNHEALTHY_THRESHOLD) {
+      return
+    }
+    if (Date.now() < this.coreNextRecoveryAt) {
+      return
+    }
+    if (!this.coreDropRecorded) {
+      ClashViewModel.socketProxy.offlineTime.push(Date.now())
+      this.coreDropRecorded = true
+      Xb_ToastUtil.showToast({
+        message: `核心恢复中(${ClashViewModel.socketProxy.offlineTime.length})...`
+      })
+    }
+    await this.recoverCore(clashCore)
+  }
+
+  /** @description 按内核模式恢复核心 */
+  private async recoverCore(clashCore: ClashCore): Promise<void> {
+    if (!ClashViewModel.vpnStarted) {
+      return
+    }
+    this.coreRecovering = true
+    try {
+      let result = false
+      if (clashCore == ClashCore.mihomo) {
+        // mihomo：完整重启 VPN 扩展，由扩展重新启动内核
+        result = await ClashViewModel.ChangeCore(clashCore)
+      } else {
+        // 前台模式：扩展只做握手，必须重建 UI 侧 SocketStubService
+        result = await ClashViewModel.ChangeCore(ClashCore.ClashMeta)
+        if (result) {
+          result = await this.restartForegroundCore()
+        }
+      }
+      // 恢复期间用户可能已经主动停止代理，此时不要再把 TUN 拉起来
+      if (!ClashViewModel.vpnStarted) {
+        return
+      }
+      if (result) {
+        result = await ClashViewModel.ReStartVpn()
+      }
+      if (result) {
+        this.resetCoreHealthState()
+      } else {
+        this.scheduleNextCoreRecovery()
+      }
+    } catch (e) {
+      hilog.error(0x0000, 'EntryAbility', '核心恢复异常: %{public}s', JSON.stringify(e) ?? '')
+      this.scheduleNextCoreRecovery()
+    } finally {
+      this.coreRecovering = false
+    }
+  }
+
+  /** @description 重建前台模式下的 UI 侧核心宿主 */
+  private async restartForegroundCore(): Promise<boolean> {
+    try {
+      if (this.debugVpn) {
+        await this.debugVpn.destroy()
+      }
+    } catch (e) {
+      hilog.error(0x0000, 'EntryAbility', '销毁旧 UI 内核失败: %{public}s', JSON.stringify(e) ?? '')
+    }
+    this.debugVpn = new SocketStubService(this.context)
+    const started = await this.debugVpn.startService(Date.now())
+    if (!started) {
+      hilog.error(0x0000, 'EntryAbility', '重建 UI 内核失败')
+      this.debugVpn = null
+    }
+    return started
+  }
+
+  /** @description 恢复失败后按指数退避，避免每秒重复 stop/start 核心 */
+  private scheduleNextCoreRecovery(): void {
+    this.coreRecoveryAttempts++
+    const exponent = Math.min(this.coreRecoveryAttempts - 1, 5)
+    const delay = Math.min(CORE_RECOVERY_MAX_BACKOFF_MS, 1000 * Math.pow(2, exponent))
+    this.coreNextRecoveryAt = Date.now() + delay
+    if (this.coreRecoveryAttempts === 5) {
+      Xb_ToastUtil.showToast({ message: '核心恢复失败，请尝试重启应用' })
+    }
   }
 
   /** @description 启动配置自动更新服务 */

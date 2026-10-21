@@ -18,7 +18,7 @@ export class SocketStubService {
     this.vpnService.init()
   }
 
-  async startService(requestId: number){
+  async startService(requestId: number): Promise<boolean> {
     try {
       const socketPath = this.vpnService.context.filesDir + '/ClashBox.sock'
       const goPath = this.vpnService.context.filesDir + '/clash_go.sock'
@@ -35,6 +35,11 @@ export class SocketStubService {
         }
       }
       startIpc(goPath)
+      // startIpc 只是拉起 Go 协程，socket 文件可能稍后才出现；等它就绪再写锁
+      const ipcReady = await this.waitForFile(goPath, 2000)
+      if (!ipcReady) {
+        throw new Error('Go IPC socket 未就绪')
+      }
       await this.server.listen({ address: socketPath})
       this.server.on('connect', (client: socket.LocalSocketConnection) => {
           this.clientPool.set(client.clientId, client);
@@ -48,6 +53,7 @@ export class SocketStubService {
           });
       })
       await this.lockVpn(requestId)
+      return true
     } catch (e) {
       console.error("socket failure", e.message)
       // 启动失败也清理残留文件, 避免下一次 startService 同样被旧文件阻塞
@@ -62,8 +68,26 @@ export class SocketStubService {
       } catch (cleanErr) {
         console.warn(`SocketStubService 失败后清理 socket 文件异常: ${cleanErr.message}`)
       }
+      return false
     }
   }
+
+  /** 等待 Go IPC socket 文件出现，避免 startIpc 异步绑定期间 loadConfig 误判失败 */
+  private async waitForFile(path: string, timeoutMs: number): Promise<boolean> {
+    const startTime = Date.now()
+    while (Date.now() - startTime < timeoutMs) {
+      try {
+        if (await fileIo.access(path)) {
+          return true
+        }
+      } catch (e) {
+        // 文件系统暂时不可访问时继续重试
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 50))
+    }
+    return false
+  }
+
   async lockVpn(local: number) {
     let lockPath = this.vpnService.context.filesDir + '/vpn_ipc.lock';
     let encoder = new util.TextEncoder()

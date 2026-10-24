@@ -2473,6 +2473,26 @@
       "value": "1. 在線搜尋只能搵到市場正式版應用，未正式上架嘅應用暫時唔支援檢索；\n"
     },
     {
+      "name": "search_failed_network",
+      "value": "搜尋失敗，請檢查網絡後重試"
+    },
+    {
+      "name": "retry",
+      "value": "重試"
+    },
+    {
+      "name": "loading_more",
+      "value": "載入中..."
+    },
+    {
+      "name": "no_more_data",
+      "value": "沒有更多了"
+    },
+    {
+      "name": "load_more",
+      "value": "載入更多"
+    },
+    {
       "name": "confirm",
       "value": "確認"
     },

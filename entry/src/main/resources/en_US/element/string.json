@@ -2473,6 +2473,26 @@
       "value": "1. Online search can only retrieve official market applications. Applications that have not been officially listed are not supported for retrieval; \n"
     },
     {
+      "name": "search_failed_network",
+      "value": "Search failed, please check your network and try again"
+    },
+    {
+      "name": "retry",
+      "value": "Retry"
+    },
+    {
+      "name": "loading_more",
+      "value": "Loading..."
+    },
+    {
+      "name": "no_more_data",
+      "value": "No more results"
+    },
+    {
+      "name": "load_more",
+      "value": "Load more"
+    },
+    {
       "name": "confirm",
       "value": "Confirm"
     },

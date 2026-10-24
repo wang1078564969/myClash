@@ -59,14 +59,18 @@ struct OnlineSearch {
   // 搜索结果列表
   @State apps: SearchAppInfo[] = []
   @StorageLink('appConfig') appConfig: AppConfig = new AppConfig()
-  // 是否正在搜索
+  // 是否正在搜索（本次查询首页加载中）
   @State isSearch: boolean = false;
+  // 是否正在加载更多
+  @State isLoadMore: boolean = false;
+  // 本次搜索是否失败（网络/服务异常）-> 展示失败态与重试入口，避免一直转圈
+  @State searchError: boolean = false;
+  // 是否还有下一页数据
+  @State hasMore: boolean = false;
   /* 是否开启 `Index` 页面的前景模糊 */
   @Consume('isEnableIndexForegroundBlur') isEnableIndexForegroundBlur: boolean
   // 在线服务状态（0: 故障, 2: 重试, 1: 正常, 3: 维护）
   @State serviceStatus: ServiceStatus = ServiceStatus.RETRY
-  // 临时的搜索结果列表 -> 用于刷新列表使用的存储一下减少请求次数
-  private resultApps: SearchAppItem[] = []
   // 防抖定时器ID
   private debounceTimerId: number = -1
   // 防抖延迟时间（毫秒）
@@ -79,6 +83,24 @@ struct OnlineSearch {
   private readonly SERVICE_STATUS_INTERVAL: number = 5 * 60 * 1000
   // 红绿灯状态指示器尺寸
   private readonly INDICATOR_SIZE: number = 16
+  // 每页数量
+  private readonly PAGE_SIZE: number = 20
+  // 当前已加载页码
+  private currentPage: number = 1
+  // 结果总数（用于判断是否还有下一页）
+  private totalCount: number = 0
+  // 当前搜索关键词（已归一化）
+  private currentKeyword: string = ''
+  // 搜索请求序号 -> 丢弃过期请求的返回，避免旧结果覆盖新结果
+  private searchSeq: number = 0
+  // 图标缓存（icon_url -> 图标数据）-> 刷新列表时避免重复下载
+  private iconCache: Map<string, Uint8Array | undefined> = new Map<string, Uint8Array | undefined>()
+  // API 主机：官方 API 主机优先，官网主机兜底（官网主机走 CDN，部分网络环境下不可达）
+  private readonly API_HOSTS: string[] = ['https://api.next.vcck.cn', 'https://next.vcck.cn']
+  // 连接超时（毫秒）
+  private readonly CONNECT_TIMEOUT: number = 10 * 1000
+  // 读取超时（毫秒）
+  private readonly READ_TIMEOUT: number = 15 * 1000
 
   aboutToAppear(): void {
     this.fetchServiceStatus()
@@ -92,6 +114,7 @@ struct OnlineSearch {
   aboutToDisappear(): void {
     this.clearDebounceTimer()
     clearInterval(this.serviceStatusTimerId)
+    this.iconCache.clear()
   }
 
   build() {
@@ -116,11 +139,14 @@ struct OnlineSearch {
             icon: new SymbolGlyphModifier($r('sys.symbol.xmark')).fontColor([this.icon_emphasize])
           })
           .onChange((value: string) => {
+            // 同步搜索文本（空态提示需要用到最新关键词）
+            this.searchText = value
             // 使用防抖 (Debounce) 进行搜索
             this.debounceSearch(value)
           })
           .onSubmit(async (value: string) => {
             // 提交时立即执行搜索（清除防抖定时器）
+            this.searchText = value
             this.clearDebounceTimer()
             await this.searchApps(value)
           })
@@ -136,6 +162,9 @@ struct OnlineSearch {
           }
           .justifyContent(FlexAlign.Center)
           .layoutWeight(1)
+        } else if (this.searchError) {
+          // 网络/服务异常：展示失败态并提供重试入口，避免一直停留在转圈状态
+          this.searchErrorBuilder()
         } else if (this.apps.length === 0 && this.searchText.trim() !== '') {
           // 搜索结果为空，显示提交应用建议
           EmptySearchResult({
@@ -179,7 +208,7 @@ struct OnlineSearch {
                   Xb_ToastUtil.showToast({ message: $r('app.string.add_success'), duration: 1000 })
 
                   // 重新加载列表（仅新增时执行）
-                  this.apps = await this.convertToAppInfo(this.resultApps)
+                  await this.refreshExistsFlags()
                   EventHub.sendEvent(EventKey.ReLoadAccessControl)
                 } else {
                   // 2. 删除逻辑 - 显示确认弹窗防止误操作
@@ -188,12 +217,38 @@ struct OnlineSearch {
                 }
               })
             })
+            // 分页加载状态 -> 滚动到底部自动加载更多，也可点击底部区域加载
+            if (this.apps.length > 0) {
+              ListItem() {
+                Row({ space: 8 }) {
+                  if (this.isLoadMore) {
+                    LoadingProgress()
+                      .color(this.icon_emphasize)
+                      .width(18)
+                      .aspectRatio(1)
+                  }
+                  Text(this.isLoadMore ? $r('app.string.loading_more') :
+                    (this.hasMore ? $r('app.string.load_more') : $r('app.string.no_more_data')))
+                    .fontSize(13)
+                    .fontColor($r('sys.color.font_secondary'))
+                }
+                .width('100%')
+                .justifyContent(FlexAlign.Center)
+                .padding({ top: 10, bottom: 10 })
+                .onClick(() => {
+                  this.loadMore()
+                })
+              }
+            }
           }
           .width('100%')
           .contentStartOffset(5)
           .alignListItem(ListItemAlign.Center)
           .contentEndOffset(CONTENT_END_OFFSET_150 - 55)
           .padding({ left: PageMargin(this.widthBp, this.heightBp), right: PageMargin(this.widthBp, this.heightBp) })
+          .onReachEnd(() => {
+            this.loadMore()
+          })
         }
       }
       .padding({ bottom: 32 })
@@ -252,6 +307,35 @@ struct OnlineSearch {
     .alignItems(VerticalAlign.Center)
   }
 
+  /** 搜索失败态（网络异常 / 服务不可用） */
+  @Builder
+  searchErrorBuilder() {
+    Column({ space: 16 }) {
+      SymbolGlyph($r('sys.symbol.xmark_circle'))
+        .fontSize(48)
+        .fontColor(['#FFE84026'])
+      Text($r('app.string.search_failed_network'))
+        .fontSize(15)
+        .fontColor($r('sys.color.font_secondary'))
+        .textAlign(TextAlign.Center)
+      Button($r('app.string.retry'))
+        .width(160)
+        .height(40)
+        .backgroundColor(this.icon_emphasize)
+        .fontColor(Color.White)
+        .fontSize(16)
+        .onClick(() => {
+          this.searchApps(this.searchText)
+        })
+    }
+    .width('100%')
+    .layoutWeight(1)
+    .padding({ left: 24, right: 24 })
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .transition(customAnimationUtil.isOpacity(this.uiConfig))
+  }
+
   /** 删除确认弹窗控制器 */
   deleteDialogController: CustomDialogController = new CustomDialogController({
     builder: theRowCustomDialog({
@@ -300,8 +384,8 @@ struct OnlineSearch {
         await accessControlRdb.removeAppFromDomain(this.pendingDeleteApp.package_name, domain)
         Xb_ToastUtil.showToast({ message: $r('app.string.delete_success'), duration: 1000 })
 
-        // 刷新列表
-        this.apps = await this.convertToAppInfo(this.resultApps)
+        // 刷新列表（仅更新已存在状态，避免重复下载图标）
+        await this.refreshExistsFlags()
         EventHub.sendEvent(EventKey.ReLoadAccessControl)
       } catch (error) {
         hilog.error(0xFF00, TAG, "删除失败: %{public}s", error.message)
@@ -342,8 +426,12 @@ struct OnlineSearch {
     const httpRequest = http.createHttp()
     const url = 'https://jk.vcck.cn/api/status-page/heartbeat/clashbox'
 
-    httpRequest.request(url, (err: Error, data: http.HttpResponse) => {
-      if (!err && typeof data.result === 'string') {
+    httpRequest.request(url, {
+      method: http.RequestMethod.GET,
+      connectTimeout: this.CONNECT_TIMEOUT,
+      readTimeout: this.READ_TIMEOUT
+    }, (err: Error, data: http.HttpResponse) => {
+      if (!err && data.responseCode === http.ResponseCode.OK && typeof data.result === 'string') {
         try {
           const response = JSON.parse(data.result) as HeartbeatResponse
           // 获取 key 为 "8" 的心跳列表
@@ -375,6 +463,47 @@ struct OnlineSearch {
   }
 
   /**
+   * 归一化搜索关键词
+   * @description 去除首尾空白、全角转半角、合并连续空白
+   *              服务端是按应用名做子串匹配的，任何多余空白（如输入法带出的空格）都会导致 0 命中
+   * @param raw 原始输入
+   * @returns 归一化后的关键词
+   */
+  private normalizeKeyword(raw: string): string {
+    if (!raw) {
+      return ''
+    }
+    let result = ''
+    for (let i = 0; i < raw.length; i++) {
+      const code = raw.charCodeAt(i)
+      if (code === 0x3000) {
+        // 全角空格
+        result += ' '
+      } else if (code >= 0xFF01 && code <= 0xFF5E) {
+        // 全角 ASCII 字符转半角
+        result += String.fromCharCode(code - 0xFEE0)
+      } else {
+        result += raw.charAt(i)
+      }
+    }
+    return result.replace(/\s+/g, ' ').trim()
+  }
+
+  /** 重置搜索状态（清空输入时使用） */
+  private resetSearchState(): void {
+    // 序号自增 -> 进行中的请求返回后会被丢弃
+    this.searchSeq++
+    this.isSearch = false
+    this.isLoadMore = false
+    this.searchError = false
+    this.hasMore = false
+    this.currentPage = 1
+    this.totalCount = 0
+    this.currentKeyword = ''
+    this.apps = []
+  }
+
+  /**
    * 防抖搜索 - 延迟执行搜索，避免频繁请求
    * @param value 搜索关键词
    */
@@ -382,18 +511,16 @@ struct OnlineSearch {
     // 清除之前的定时器
     this.clearDebounceTimer()
 
-    // 如果输入为空，直接清空结果
-    if (value.length === 0) {
-      this.searchText = ''
-      this.apps = []
-      this.resultApps = []
+    // 如果归一化后为空，直接清空结果
+    if (this.normalizeKeyword(value).length === 0) {
+      this.resetSearchState()
       return
     }
 
     // 设置新的定时器
     this.debounceTimerId = setTimeout(async () => {
-      await this.searchApps(value)
       this.debounceTimerId = -1
+      await this.searchApps(value)
     }, this.DEBOUNCE_DELAY)
   }
 
@@ -413,90 +540,251 @@ struct OnlineSearch {
   }
 
   /**
-   * 执行在线搜索应用
+   * 执行在线搜索应用（重新查询第一页）
    * @param value 搜索关键词
    */
   private async searchApps(value: string): Promise<void> {
-    this.searchText = value
-    if (value.length > 0) {
-      try {
-        this.isSearch = true
-        const response = await this.getAppList(value)
+    const keyword = this.normalizeKeyword(value)
+    if (keyword.length === 0) {
+      this.resetSearchState()
+      return
+    }
 
-        if (response.success && response.data) {
-          this.resultApps = response.data
-          this.apps = await this.convertToAppInfo(this.resultApps)
+    // 序号自增 -> 旧请求的结果会被丢弃，避免覆盖新结果
+    const seq = ++this.searchSeq
+    this.currentKeyword = keyword
+    this.currentPage = 1
+    this.totalCount = 0
+    this.apps = []
+    this.hasMore = false
+    this.searchError = false
+    this.isLoadMore = false
+    this.isSearch = true
+    try {
+      const response = await this.getAppList(keyword, 1, this.PAGE_SIZE)
+      if (seq !== this.searchSeq) {
+        return
+      }
+      if (!response.success) {
+        throw new Error(response.message ?? '搜索服务返回失败')
+      }
+      await this.applyResult(response, false, seq)
+      hilog.info(0xFF00, TAG, "搜索成功，关键词: %{public}s, 已加载: %{public}d / %{public}d",
+        keyword, this.apps.length, this.totalCount)
+    } catch (error) {
+      if (seq !== this.searchSeq) {
+        return
+      }
+      // 请求失败/服务异常 -> 展示失败态，避免一直转圈
+      this.searchError = true
+      hilog.error(0xFF00, TAG, "搜索失败: %{public}s", (error as Error).message)
+    } finally {
+      // 无论成功失败都要结束加载态
+      if (seq === this.searchSeq) {
+        this.isSearch = false
+      }
+    }
+  }
 
-          this.isSearch = false
-          hilog.info(0xFF00, TAG, "搜索成功，获取到 %{public}d 条数据", this.apps.length)
-        }
-      } catch (error) {
-        hilog.error(0xFF00, TAG, "搜索失败: %{public}s", error.message)
+  /** 加载下一页（滚动到底部 / 点击底部时触发） */
+  private async loadMore(): Promise<void> {
+    if (this.isSearch || this.isLoadMore || !this.hasMore || this.currentKeyword.length === 0) {
+      return
+    }
+    const seq = this.searchSeq
+    const nextPage = this.currentPage + 1
+    this.isLoadMore = true
+    try {
+      const response = await this.getAppList(this.currentKeyword, nextPage, this.PAGE_SIZE)
+      if (seq !== this.searchSeq) {
+        return
+      }
+      if (!response.success) {
+        throw new Error(response.message ?? '搜索服务返回失败')
+      }
+      this.currentPage = nextPage
+      await this.applyResult(response, true, seq)
+    } catch (error) {
+      if (seq === this.searchSeq) {
+        hilog.error(0xFF00, TAG, "加载更多失败: %{public}s", (error as Error).message)
+        Xb_ToastUtil.showToast({ message: $r('app.string.search_failed_network') })
+      }
+    } finally {
+      if (seq === this.searchSeq) {
+        this.isLoadMore = false
       }
     }
   }
 
   /**
-   * 获取应用列表
+   * 将接口响应追加/替换到列表中
+   * @param response 搜索响应
+   * @param isAppend 是否追加到现有列表
+   * @param seq 请求序号（用于丢弃过期结果）
+   */
+  private async applyResult(response: SearchResponse, isAppend: boolean, seq: number): Promise<void> {
+    const data: SearchAppItem[] = response.data ?? []
+    if (data.length === 0) {
+      if (!isAppend) {
+        this.apps = []
+        this.totalCount = 0
+      }
+      // 兜底：没有更多数据时停止分页，避免空页导致反复请求
+      this.hasMore = false
+      return
+    }
+    const converted = await this.convertToAppInfo(data)
+    // 图标下载是异步的，这里再校验一次序号
+    if (seq !== this.searchSeq) {
+      return
+    }
+    this.apps = isAppend ? this.apps.concat(converted) : converted
+    this.totalCount = typeof response.total === 'number' ? response.total : this.apps.length
+    this.hasMore = this.apps.length < this.totalCount
+  }
+
+  /**
+   * 获取应用列表（多主机容错 + 超时控制）
    * @param q 搜索关键词
-   * @param page 页码，默认为 1
-   * @param pageSize 每页数量，默认为 10
+   * @param page 页码
+   * @param pageSize 每页数量
    * @returns Promise<SearchResponse> 搜索响应
    */
-  getAppList(q: string, page: number = 1, pageSize: number = 10): Promise<SearchResponse> {
-    return new Promise<SearchResponse>((resolve, reject) => {
-      let httpRequest = http.createHttp()
-      const url =
-        `https://next.vcck.cn/api/apps/search-by-name?q=${encodeURIComponent(q)}&page=${page}&page_size=${pageSize}`
+  private async getAppList(q: string, page: number, pageSize: number): Promise<SearchResponse> {
+    const query = `?q=${encodeURIComponent(q)}&page=${page}&page_size=${pageSize}`
+    let lastError: Error = new Error('请求失败')
+    for (let i = 0; i < this.API_HOSTS.length; i++) {
+      const host = this.API_HOSTS[i]
+      try {
+        const response = await this.requestAppList(`${host}/api/apps/search-by-name${query}`)
+        hilog.info(0xFF00, TAG, "搜索接口请求成功，主机: %{public}s", host)
+        return response
+      } catch (error) {
+        lastError = error as Error
+        hilog.warn(0xFF00, TAG, "主机 %{public}s 请求失败: %{public}s", host, (error as Error).message)
+      }
+    }
+    throw lastError
+  }
 
-      httpRequest.request(url, (err: Error, data: http.HttpResponse) => {
-        if (!err) {
-          hilog.info(0xFF00, TAG, "HTTP返回值: %{public}s", JSON.stringify(data))
-          // 确保 data.result 是字符串类型
-          if (typeof data.result === 'string') {
-            try {
-              // 将 data.result 字符串解析为 JSON 对象
-              const response = JSON.parse(data.result) as SearchResponse
-              resolve(response)
-            } catch (parseErr) {
-              reject(new Error('无法解析响应: ' + parseErr.message))
-              hilog.error(0xFF00, TAG, "无法解析响应: %{public}s", parseErr.message)
-            }
-          } else {
-            reject(new Error('返回值不是string'))
-            hilog.warn(0xFF00, TAG, "返回值不是string")
-          }
-        } else {
-          reject(new Error(JSON.stringify(err)))
-        }
+  /**
+   * 发起单次搜索请求（带连接/读取超时，避免长时间无响应）
+   * @param url 完整请求地址
+   * @returns Promise<SearchResponse>
+   */
+  private requestAppList(url: string): Promise<SearchResponse> {
+    return new Promise<SearchResponse>((resolve, reject) => {
+      const httpRequest = http.createHttp()
+
+      httpRequest.request(url, {
+        method: http.RequestMethod.GET,
+        connectTimeout: this.CONNECT_TIMEOUT,
+        readTimeout: this.READ_TIMEOUT,
+        expectDataType: http.HttpDataType.STRING,
+        header: { 'Content-Type': 'application/json' }
+      }, (err: Error, data: http.HttpResponse) => {
         httpRequest.destroy()
+        if (err) {
+          reject(err)
+          return
+        }
+        if (data.responseCode !== http.ResponseCode.OK) {
+          reject(new Error(`HTTP 状态码异常: ${data.responseCode}`))
+          return
+        }
+        // 确保 data.result 是字符串类型
+        if (typeof data.result !== 'string') {
+          hilog.warn(0xFF00, TAG, "返回值不是string")
+          reject(new Error('返回值不是string'))
+          return
+        }
+        try {
+          // 将 data.result 字符串解析为 JSON 对象
+          const response = JSON.parse(data.result) as SearchResponse
+          resolve(response)
+        } catch (parseErr) {
+          hilog.error(0xFF00, TAG, "无法解析响应: %{public}s", (parseErr as Error).message)
+          reject(new Error('无法解析响应: ' + (parseErr as Error).message))
+        }
       })
     })
   }
 
+  /**
+   * 将接口返回的应用数据转换为列表数据
+   * @description 图标数据走缓存 + 并行下载，避免串行下载多个图标造成明显等待
+   * @param items 接口返回的应用信息
+   * @returns Promise<SearchAppInfo[]>
+   */
   async convertToAppInfo(items: SearchAppItem[]): Promise<SearchAppInfo[]> {
     const appInfoList: SearchAppInfo[] = []
     // 获取当前列表中的所有包名
     const appListData = await this.loadAppsInfo()
     const appPackageList = appListData.map(app => app.package_name)
 
+    // 并行获取图标
+    const iconTasks: Promise<Uint8Array | undefined>[] = []
     for (const item of items) {
-      // 下载图片并转换为 Uint8Array
-      const iconUintArr = await Xb_ImageUtils.downloadImageAsUint8Array(item.icon_url)
-      // 检查包名是否已存在于当前列表中
-      const isExists = appPackageList.includes(item.pkg_name) ?? false;
+      iconTasks.push(this.getIcon(item.icon_url))
+    }
+    const icons = await Promise.all(iconTasks)
 
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]
       appInfoList.push({
         name: item.name,
         package_name: item.pkg_name,
-        iconUintArr: iconUintArr,
+        iconUintArr: icons[i],
         time: Date.now(),
         isSelected: false,
-        isExists
+        // 检查包名是否已存在于当前列表中
+        isExists: appPackageList.includes(item.pkg_name)
       } as SearchAppInfo)
     }
 
     return appInfoList
+  }
+
+  /**
+   * 获取应用图标（优先取缓存）
+   * @param iconUrl 图标地址
+   * @returns Promise<Uint8Array | undefined>
+   */
+  private getIcon(iconUrl: string): Promise<Uint8Array | undefined> {
+    if (this.iconCache.has(iconUrl)) {
+      return Promise.resolve(this.iconCache.get(iconUrl))
+    }
+    return new Promise<Uint8Array | undefined>((resolve) => {
+      Xb_ImageUtils.downloadImageAsUint8Array(iconUrl).then((data: Uint8Array | undefined) => {
+        this.iconCache.set(iconUrl, data)
+        resolve(data)
+      }).catch(() => {
+        // 图标下载失败不阻塞列表展示
+        this.iconCache.set(iconUrl, undefined)
+        resolve(undefined)
+      })
+    })
+  }
+
+  /**
+   * 刷新列表中应用的「是否已添加」状态
+   * @description 不重新下载图标，避免添加/删除后整列表重新请求图片
+   */
+  private async refreshExistsFlags(): Promise<void> {
+    const appListData = await this.loadAppsInfo()
+    const existsPackages = new Set<string>(appListData.map(app => app.package_name))
+    const updatedApps: SearchAppInfo[] = []
+    for (const app of this.apps) {
+      updatedApps.push({
+        name: app.name,
+        package_name: app.package_name,
+        iconUintArr: app.iconUintArr,
+        time: app.time,
+        isSelected: app.isSelected,
+        isExists: existsPackages.has(app.package_name)
+      } as SearchAppInfo)
+    }
+    this.apps = updatedApps
   }
 }
 

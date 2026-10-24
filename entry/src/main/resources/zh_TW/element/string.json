@@ -2473,6 +2473,26 @@
       "value": "1. 線上搜尋僅能查詢到市集正式版應用程式，尚未正式上架的應用程式暫不支援搜尋；\n"
     },
     {
+      "name": "search_failed_network",
+      "value": "搜尋失敗，請檢查網路後重試"
+    },
+    {
+      "name": "retry",
+      "value": "重試"
+    },
+    {
+      "name": "loading_more",
+      "value": "載入中..."
+    },
+    {
+      "name": "no_more_data",
+      "value": "沒有更多了"
+    },
+    {
+      "name": "load_more",
+      "value": "載入更多"
+    },
+    {
       "name": "confirm",
       "value": "確認"
     },
